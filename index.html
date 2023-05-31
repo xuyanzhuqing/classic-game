@@ -28,7 +28,7 @@
   </style>
 </head>
 <body>
-  <div id="playground" tabindex="0" style="width: 600px; height: 400px; border: 1px solid salmon"></div>
+  <div id="playground" tabindex="0" border-collapse="none" style="border: 1px solid salmon"></div>
   <button onclick="game.start()">start</button>
   <button onclick="game.stop()">stop</button>
   <script type="text/javascript">
@@ -48,6 +48,13 @@
       parent.el.appendChild(el)
       this.el = el
       this.move()
+      this.mark(true)
+    }
+
+    Spot.prototype.mark = function (isOccupied) {
+      const colIndex = this.position.x / Snake.size
+      const rowIndex = this.position.y / Snake.size
+      this.parent.blocks[rowIndex][colIndex] = isOccupied
     }
 
     Spot.prototype.move = function () {
@@ -72,8 +79,13 @@
     Snake.size = 10
 
     Snake.prototype.move = function (deltaX, deltaY) {
-      this.deltaX = deltaX
-      this.deltaY = deltaY
+      // 判断如果当前方向与之前相反则不执行操作
+      if (this.deltaX + deltaX === 0 && this.deltaY + deltaY === 0) {
+        return
+      }
+
+      // 尾清除
+      this.spots[0].mark()
 
       const head = this.spots[this.spots.length - 1]
       for (let i = 0; i < this.spots.length - 1; i++) {
@@ -84,18 +96,27 @@
       }
 
       const depart = Snake.size / this.step
-      head.position.set(head.position.x + deltaX * depart, head.position.y + deltaY * depart)
+      const headPosition = [head.position.x + deltaX * depart, head.position.y + deltaY * depart]
+      head.position.set(...headPosition)
+      this.deltaX = deltaX
+      this.deltaY = deltaY
       head.move()
+      // 头标记
+      head.mark(true)
     }
 
     Snake.prototype.eat = function () {}
 
-    function Playground (width = 400, height = 300) {
+    function Playground (width = 200, height = 100) {
       this.width = width
       this.height = height
       this.el = document.getElementById("playground");
       this.el.style.width = width + "px"
       this.el.style.height = height + "px"
+      const blocks = new Array(this.height / Snake.size)
+        .fill(undefined)
+        .map(() => new Array(this.width / Snake.size))
+      this.blocks = blocks
     }
   </script>
   <script>
@@ -118,7 +139,8 @@
     Game.prototype.createSnake = function () {
       const playground = this.playground
       const body = new Array(5).fill([0, 0]).map(function ([x, y], index) {
-        return new Spot(playground, new Position(x + index * Snake.size, y))
+        const spot = new Spot(playground, new Position(x + index * Snake.size, y))
+        return spot
       })
       const snake = new Snake(
         ...body
@@ -133,26 +155,36 @@
       const snake = this.createSnake()
       this.snake = snake
       this.initHandler()
-      this.initFoods()
+      this.createFoods()
+      console.table(this.playground.blocks)
     }
 
-    Game.prototype.initFoods = function (num = 10) {
+    Game.prototype.createFoods = function (num = 10) {
       const random = Math.round(Math.random() * num)
+      const blocks = this.playground.blocks
+      const spareBlocks = []
+      for (let i = 0; i < blocks.length; i++) {
+        const rows = blocks[i]
+        for (let j = 0; j < rows.length; j++) {
+          if (rows[j]) {
+            continue
+          }
+          spareBlocks.push([j, i])
+        }
+      }
       for (let i = random; i >= 0; i--) {
-        this.createFood()
+        this.createFood(spareBlocks)
       }
     }
 
     // 优先距离蛇头 50 格内生成食物，并且不能生成在蛇身体上, 也不能生成到已有的食物身上
-    Game.prototype.createFood = function () {
-      let randomX = Math.round(Math.random() * this.playground.width)
-      let randomY = Math.round(Math.random() * this.playground.height)
+    Game.prototype.createFood = function (spareBlocks) {
+      const randomIndex = Math.floor(Math.random() * spareBlocks.length)
+      const [x, y] = spareBlocks[randomIndex]
 
-      // 去除不能整除的数字
-      randomX = randomX - randomX % Snake.size
-      randomY = randomY - randomY % Snake.size
+      randomX = x * Snake.size
+      randomY = y * Snake.size
 
-      const occupiedPositions = this.snake.spots.concat(this.foods).map(spot => spot.position)
       // 查找当前位置是否可用，若不可用，则继续生成
       const food = new Food(this.playground, new Position(randomX, randomY))
       food.el.classList.add("food")
