@@ -12,9 +12,14 @@
     }
 
     .spot {
+      position: absolute;
       width: 10px;
       height: 10px;
       border: 1px solid slateblue;
+    }
+
+    .playground {
+      position: relative
     }
   </style>
 </head>
@@ -60,15 +65,23 @@
       this.deltaY = 0
     }
 
+    Snake.size = 10
+
     Snake.prototype.move = function (deltaX, deltaY) {
       this.deltaX = deltaX
       this.deltaY = deltaY
-      this.spots.forEach(function (spot) {
-        const x = spot.position.x + deltaX
-        const y = spot.position.y + deltaY
-        spot.position.set(x, y)
-        spot.move()
-      })
+
+      const head = this.spots[this.spots.length - 1]
+      for (let i = 0; i < this.spots.length - 1; i++) {
+        const prev = this.spots[i + 1]
+        const current = this.spots[i]
+        current.position.set(prev.position.x, prev.position.y)
+        current.move()
+      }
+
+      const depart = Snake.size / this.step
+      head.position.set(head.position.x + deltaX * depart, head.position.y + deltaY * depart)
+      head.move()
     }
 
     Snake.prototype.eat = function () {}
@@ -83,7 +96,6 @@
     }
 
     function Game () {
-      this.step = 2
       this.foods = []
       this.startTime = null
       this.previousTimeStamp = null
@@ -92,15 +104,24 @@
       this.init()
     }
 
+    Game.prototype.createSnake = function () {
+      const body = new Array(5).fill([0, 0]).map(function ([x, y], index) {
+        return new Spot(this.playground, new Position(x + index * Snake.size, y))
+      })
+      const snake = new Snake(
+        ...body
+      )
+      return snake
+    }
+
     Game.prototype.init = function () {
       this.state = GameState.init
 
       this.playground = document.getElementById("playground");
-      const head = new Spot(playground, new Position(0, 0))
-      const snake = new Snake(head)
+      const snake = this.createSnake()
       this.snake = snake
-      const step = this.snake.step
       playground.addEventListener("keydown", function(e) {
+        const step = snake.step
         switch(e.key) {
           case 'ArrowDown':
             snake.move(0, step)
