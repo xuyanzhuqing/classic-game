@@ -15,7 +15,11 @@
       position: absolute;
       width: 10px;
       height: 10px;
-      border: 1px solid slateblue;
+      background: lightblue;
+    }
+
+    .food {
+      background: seagreen;
     }
 
     .playground {
@@ -41,7 +45,7 @@
       const el = document.createElement("div")
       el.classList.add("spot")
       this.parent = parent
-      parent.appendChild(el)
+      parent.el.appendChild(el)
       this.el = el
       this.move()
     }
@@ -86,6 +90,13 @@
 
     Snake.prototype.eat = function () {}
 
+    function Playground (width = 400, height = 300) {
+      this.width = width
+      this.height = height
+      this.el = document.getElementById("playground");
+      this.el.style.width = width + "px"
+      this.el.style.height = height + "px"
+    }
   </script>
   <script>
     const GameState = {
@@ -105,8 +116,9 @@
     }
 
     Game.prototype.createSnake = function () {
+      const playground = this.playground
       const body = new Array(5).fill([0, 0]).map(function ([x, y], index) {
-        return new Spot(this.playground, new Position(x + index * Snake.size, y))
+        return new Spot(playground, new Position(x + index * Snake.size, y))
       })
       const snake = new Snake(
         ...body
@@ -117,10 +129,39 @@
     Game.prototype.init = function () {
       this.state = GameState.init
 
-      this.playground = document.getElementById("playground");
+      this.playground = new Playground()
       const snake = this.createSnake()
       this.snake = snake
-      playground.addEventListener("keydown", function(e) {
+      this.initHandler()
+      this.initFoods()
+    }
+
+    Game.prototype.initFoods = function (num = 10) {
+      const random = Math.round(Math.random() * num)
+      for (let i = random; i >= 0; i--) {
+        this.createFood()
+      }
+    }
+
+    // 优先距离蛇头 50 格内生成食物，并且不能生成在蛇身体上, 也不能生成到已有的食物身上
+    Game.prototype.createFood = function () {
+      let randomX = Math.round(Math.random() * this.playground.width)
+      let randomY = Math.round(Math.random() * this.playground.height)
+
+      // 去除不能整除的数字
+      randomX = randomX - randomX % Snake.size
+      randomY = randomY - randomY % Snake.size
+
+      const occupiedPositions = this.snake.spots.concat(this.foods).map(spot => spot.position)
+      // 查找当前位置是否可用，若不可用，则继续生成
+      const food = new Food(this.playground, new Position(randomX, randomY))
+      food.el.classList.add("food")
+      this.foods.push(food)
+    }
+
+    Game.prototype.initHandler = function () {
+      const snake = this.snake
+      this.playground.el.addEventListener("keydown", function(e) {
         const step = snake.step
         switch(e.key) {
           case 'ArrowDown':
@@ -136,7 +177,6 @@
             snake.move(step, 0)
             break
           default:
-
         }
         return false
       })
@@ -171,7 +211,6 @@
   </script>
   <script>
     const game = new Game()
-    // game.start()
   </script>
 </body>
 </html>
