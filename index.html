@@ -7,6 +7,11 @@
   <title>Document</title>
 
   <style type="text/css">
+    div, ul, li {
+      margin: 0;
+      padding: 0
+    }
+
     div {
       box-sizing: border-box;
     }
@@ -25,9 +30,22 @@
     .playground {
       position: relative
     }
+
+    .panel {
+      display: flex;
+      width: 200px;
+      justify-content: space-around;
+      list-style: none;
+      font-size: 10px;
+    }
   </style>
 </head>
 <body>
+  <ul class="panel">
+    <li>状态：<span class="game-state"></span></li>
+    <li>长度：<span class="snake-length"></span></li>
+    <li>步数：<span class="step-count"></span></li>
+  </ul>
   <div id="playground" tabindex="0" border-collapse="none" style="border: 1px solid salmon"></div>
   <button onclick="game.start()">start</button>
   <button onclick="game.stop()">stop</button>
@@ -103,14 +121,31 @@
 
       const depart = Snake.size / this.step
       const head = this.spots[this.spots.length - 1]
-      const headPosition = [head.position.x + deltaX * depart, head.position.y + deltaY * depart]
+      const headPosition = new Position(head.position.x + deltaX * depart, head.position.y + deltaY * depart)
+
+      // 左右横穿
+      if (headPosition.x < 0) {
+        headPosition.x += head.parent.width
+      }
+      if (headPosition.x >= head.parent.width) {
+        headPosition.x -= head.parent.width
+      }
+
+      // 上下横穿
+      if (headPosition.y < 0) {
+        headPosition.y += head.parent.height
+      }
+      if (headPosition.y >= head.parent.height) {
+        headPosition.y -= head.parent.height
+      }
+
       for (let i = 0; i < this.spots.length - 1; i++) {
         const prev = this.spots[i + 1]
         const current = this.spots[i]
 
         if (
-          prev.position.x === headPosition[0] &&
-          prev.position.y === headPosition[1]
+          prev.position.x === headPosition.x &&
+          prev.position.y === headPosition.y
         ) {
           return MoveState.crash
         }
@@ -119,7 +154,7 @@
         current.move()
       }
 
-      head.position.set(...headPosition)
+      head.position.set(headPosition.x, headPosition.y)
       this.lastDeltaX = deltaX
       this.lastDeltaY = deltaY
       head.move()
@@ -133,7 +168,7 @@
       const spots = this.spots
       for (let i = 0; i < spots.length; i++) {
       }
-
+      // TODO：
       // 如果碰到食物则增长，并取消清楚食物
     }
 
@@ -174,8 +209,17 @@
     }
 
     Game.prototype.stateChanged = function (state) {
-
+      switch(state) {
+        case GameState.running:
+          break
+          // TODO: game over tooltip
+        case GameState.failure: alert("game over")
+        default:
+      }
     }
+
+    // TODO: update panel
+    Game.prototype.updatePanel = function () {}
 
     Game.prototype.createSnake = function () {
       const playground = this.playground
