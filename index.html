@@ -80,6 +80,10 @@
       this.el.style.transform = `translate(${x}px,${y}px)`
     }
 
+    Spot.prototype.suicide = function () {
+      this.el.remove()
+    }
+
     function Food (parent, position) {
       Spot.call(this, parent, position)
     }
@@ -109,6 +113,14 @@
       this.deltaY = deltaY
     }
 
+    Snake.prototype.head = function () {
+      return this.spots[this.spots.length - 1]
+    }
+
+    Snake.prototype.tail = function () {
+      return this.spots[0]
+    }
+
     Snake.prototype.move = function () {
       const { deltaX, deltaY } = this
       // 判断如果当前方向与之前相反则不执行操作
@@ -117,10 +129,10 @@
       }
 
       // 尾清除
-      this.spots[0].mark()
+      this.tail().mark()
 
       const depart = Snake.size / this.step
-      const head = this.spots[this.spots.length - 1]
+      const head = this.head()
       const headPosition = new Position(head.position.x + deltaX * depart, head.position.y + deltaY * depart)
 
       // 左右横穿
@@ -163,13 +175,10 @@
       return MoveState.forward
     }
 
-    Snake.prototype.eat = function () {
-      // 如果碰到自身则死亡
-      const spots = this.spots
-      for (let i = 0; i < spots.length; i++) {
-      }
-      // TODO：
-      // 如果碰到食物则增长，并取消清楚食物
+    Snake.prototype.eat = function (food) {
+      const spot = new Spot(food.parent, food.position)
+      this.spots.push(spot)
+      food.suicide()
     }
 
     function Playground (width = 200, height = 100) {
@@ -200,6 +209,7 @@
       this.playground = null
       this.snake = null
       this.state = null
+      this.interval = 500
       this.init()
     }
 
@@ -245,7 +255,17 @@
     }
 
     Game.prototype.createFoods = function (num = 10) {
-      const random = Math.round(Math.random() * num)
+      let random = Math.round(Math.random() * num)
+      if (random === 0) {
+        // 检测食物数量，如果 小于 1 则创建
+        if (this.foods.length <= 1) {
+          random = 1
+        } else {
+          // 不创建
+          return
+        }
+      }
+
       const blocks = this.playground.blocks
       const spareBlocks = []
       for (let i = 0; i < blocks.length; i++) {
@@ -310,11 +330,25 @@
         this.startTime = timestamp;
       }
       const elapsed = timestamp - this.previousTimeStamp;
-      if (this.previousTimeStamp == null || elapsed > 1000) {
+      if (this.previousTimeStamp == null || elapsed > this.interval) {
         this.previousTimeStamp = timestamp;
         const moveState = this.snake.move()
         if (moveState === MoveState.crash) {
           this.setState(GameState.failure)
+        }
+
+        // 检测前方是否存在食物
+        const head = this.snake.head()
+        for (let i = this.foods.length - 1; i >= 0; i--) {
+          const food = this.foods[i]
+          if (food.position.x === head.position.x && food.position.y === head.position.y) {
+            // 精神上消灭
+            this.foods.splice(i, 1)
+            // 肉体上消灭
+            this.snake.eat(food)
+            // 创建新的食物 or 不创建
+            this.createFoods(Math.random() > 0.5 ? 1 : 0)
+          }
         }
       }
 
