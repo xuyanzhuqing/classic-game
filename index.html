@@ -80,13 +80,21 @@
       this.step = 2
       this.deltaX = this.step
       this.deltaY = 0
+      this.lastDeltaX = this.deltaX
+      this.lastDeltaY = this.deltaY
     }
 
     Snake.size = 10
 
-    Snake.prototype.move = function (deltaX, deltaY) {
+    Snake.prototype.setDelta = function (deltaX, deltaY) {
+      this.deltaX = deltaX
+      this.deltaY = deltaY
+    }
+
+    Snake.prototype.move = function () {
+      const { deltaX, deltaY } = this
       // 判断如果当前方向与之前相反则不执行操作
-      if (this.deltaX + deltaX === 0 && this.deltaY + deltaY === 0) {
+      if (this.lastDeltaX + deltaX === 0 && this.lastDeltaY + deltaY === 0) {
         return MoveState.back
       }
 
@@ -112,8 +120,8 @@
       }
 
       head.position.set(...headPosition)
-      this.deltaX = deltaX
-      this.deltaY = deltaY
+      this.lastDeltaX = deltaX
+      this.lastDeltaY = deltaY
       head.move()
       // 头标记
       head.mark(true)
@@ -160,6 +168,15 @@
       this.init()
     }
 
+    Game.prototype.setState = function (state) {
+      this.state = state
+      this.stateChanged(state)
+    }
+
+    Game.prototype.stateChanged = function (state) {
+
+    }
+
     Game.prototype.createSnake = function () {
       const playground = this.playground
       const body = new Array(6).fill([0, 0]).map(function ([x, y], index) {
@@ -173,7 +190,7 @@
     }
 
     Game.prototype.init = function () {
-      this.state = GameState.init
+      this.setState(GameState.init)
 
       this.playground = new Playground()
       const snake = this.createSnake()
@@ -219,32 +236,29 @@
       const snake = this.snake
       this.playground.el.addEventListener("keydown", function(e) {
         const step = snake.step
-        let moveState
         switch(e.key) {
           case 'ArrowDown':
-            moveState = snake.move(0, step)
+            snake.setDelta(0, step)
             break
           case 'ArrowUp':
-            moveState = snake.move(0, -step)
+            snake.setDelta(0, -step)
             break;
           case 'ArrowLeft':
-            moveState = snake.move(-step, 0)
+            snake.setDelta(-step, 0)
             break
           case 'ArrowRight':
-            moveState = snake.move(step, 0)
+            snake.setDelta(step, 0)
             break
           default:
-        }
-        if (moveState === MoveState.crash) {
-          this.state = GameState.failure
         }
         return false
       })
     }
 
     Game.prototype.start = function () {
-      this.state = GameState.running
+      this.setState(GameState.running)
       window.requestAnimationFrame(this.run.bind(this))
+      this.playground.el.focus()
     }
 
     Game.prototype.run = function (timestamp) {
@@ -254,9 +268,9 @@
       const elapsed = timestamp - this.previousTimeStamp;
       if (this.previousTimeStamp == null || elapsed > 1000) {
         this.previousTimeStamp = timestamp;
-        const moveState = this.snake.move(this.snake.deltaX, this.snake.deltaY)
+        const moveState = this.snake.move()
         if (moveState === MoveState.crash) {
-          this.state = GameState.failure
+          this.setState(GameState.failure)
         }
       }
 
@@ -266,11 +280,11 @@
     }
 
     Game.prototype.pause = function () {
-      this.state = GameState.pause
+      this.setState(GameState.pause)
     }
 
     Game.prototype.stop = function () {
-      this.state = GameState.stop
+      this.setState(GameState.stop)
     }
   </script>
   <script>
