@@ -13,6 +13,10 @@
       box-sizing: border-box;
     }
 
+    ul, li {
+      list-style: none;
+    }
+
     #playground {
       outline: none;
       border: 1px solid dimgray
@@ -45,6 +49,7 @@
       border: none;
       outline: none;
     }
+
   </style>
 </head>
 <body>
@@ -56,9 +61,11 @@
     </ul>
   </form>
   <div id="playground" tabindex="0" border-collapse="none"></div>
+
   <button onclick="game.start()">start</button>
   <button onclick="game.pause()">stop</button>
   <button onclick="game.destroy()">reset</button>
+  <canvas id="controller"></canvas>
   <script type="text/javascript">
     function Position (x, y) {
       this.x = x; this.y = y;
@@ -66,6 +73,10 @@
 
     Position.prototype.set = function (x, y) {
       this.x = x; this.y = y;
+    }
+
+    Position.prototype.get = function (x, y) {
+      return [this.x, this.y]
     }
 
     function Spot (parent, position) {
@@ -279,7 +290,6 @@
       }
     }
 
-    // TODO: update panel
     Game.prototype.updatePanel = function () {
       const panel = document.forms.panel
       panel.gameState.value = this.state
@@ -420,6 +430,86 @@
   </script>
   <script>
     const game = new Game().init()
+  </script>
+  <script>
+    // 解决 y = x 与圆相交的一元二次函数参数
+    function positiveLineOnCircle (heart, r) {
+      const a = 1
+      const b = -heart.x - heart.y
+      const c = (Math.pow(heart.x, 2) + Math.pow(heart.y, 2) - Math.pow(r, 2)) / 2
+      return [a, b, c]
+    }
+
+    // 解决 y = n - x 与圆相交的一元二次函数参数
+    function negativeLineOnCircle (heart, r, height) {
+      const a = 1
+      const b = -(heart.x + (height - heart.y))
+      const c = (Math.pow(heart.x, 2) + Math.pow((height - heart.y), 2) - Math.pow(r, 2)) / 2
+      return [a, b, c]
+    }
+
+    function resolveTwiceMeta(a, b, c) {
+      const delta = Math.sqrt(Math.pow(b, 2) - 4 * a * c)
+      if (delta < 0) throw new Error('Invalid')
+      const res1 = (-b + delta) / 2 * a
+      const res2 = (-b - delta) / 2 * a
+      return [res1, res2]
+    }
+
+    (function (canvas) {
+      const width = 300
+      const height = 300
+      const r1 = 100
+      const r2 = 20
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+
+      const heart = new Position(width / 2, height / 2)
+      ctx.beginPath()
+      ctx.arc(heart.x, heart.y, r1, 0, Math.PI * 2, true);
+      ctx.moveTo(heart.x + r2, heart.y);
+      ctx.arc(heart.x, heart.y, r2, 0, Math.PI * 2, true);
+
+      // line 1
+      // 已知
+      // (x - hx)^2 + (x - hy)^2 = r1^2
+      // y = x
+      // (x^2 - 2*hx*x + hx^2) + (x^2 - 2*hy*x + hy^2) = r1^2
+      // x^2 - hx*x - hy*x + (hx^2 + hy^2 - r1 ^2) / 2 = 0
+      const [x1, x2] = resolveTwiceMeta(...positiveLineOnCircle(heart, r1))
+      const [x3, x4] = resolveTwiceMeta(...positiveLineOnCircle(heart, r2))
+
+      const p1 = [x1, x1]
+      const p2 = [x2, x2]
+      const p3 = [x3, x3]
+      const p4 = [x4, x4]
+      ctx.moveTo(...p1)
+      ctx.lineTo(...p3)
+      ctx.moveTo(...p2)
+      ctx.lineTo(...p4)
+
+      // line 2
+      // (x - hx)^2 + (y - hy)^2 = 100 ^2
+      // y = height - x
+      // (x - hx)^2 + (height - x - hy)^2 = 100 ^ 2
+      // x^2 - 2*hx*x + hx^2 + (height - hy)^2 - 2*(height - hy)*x + x^2 - r1^2 = 0
+      // 2*x^2 - 2*hx*x - 2*(height - hy)*x + (hx^2 + (height - hy)^2 - r1^2) = 0
+      // x^2 - (hx + (height - hy))*x + (hx^2 + (height - hy)^2 - r1^2)/2 = 0
+      const [x5, x6] = resolveTwiceMeta(...negativeLineOnCircle(heart, r1, height))
+      const [x7, x8] = resolveTwiceMeta(...negativeLineOnCircle(heart, r2, height))
+
+      const p5 = [x5, height - x5]
+      const p6 = [x6, height - x6]
+      const p7 = [x7, height - x7]
+      const p8 = [x8, height - x8]
+      ctx.moveTo(...p5)
+      ctx.lineTo(...p7)
+      ctx.moveTo(...p6)
+      ctx.lineTo(...p8)
+
+      ctx.stroke()
+    })(document.getElementById('controller'))
   </script>
 </body>
 </html>
