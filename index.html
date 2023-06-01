@@ -27,28 +27,33 @@
       background: seagreen;
     }
 
-    .playground {
-      position: relative
-    }
-
     .panel {
       display: flex;
-      width: 200px;
+      width: 300px;
       justify-content: space-around;
       list-style: none;
       font-size: 10px;
     }
+
+    .panel input {
+      width: 50px;
+      border: none;
+      outline: none;
+    }
   </style>
 </head>
 <body>
-  <ul class="panel">
-    <li>状态：<span class="game-state"></span></li>
-    <li>长度：<span class="snake-length"></span></li>
-    <li>步数：<span class="step-count"></span></li>
-  </ul>
+  <form name="panel">
+    <ul class="panel">
+      <li>状态：<input name="gameState" disabled/></li>
+      <li>长度：<input name="snakeLength" disabled/></li>
+      <li>步数：<input name="stepCount" disabled/></li>
+    </ul>
+  </form>
   <div id="playground" tabindex="0" border-collapse="none" style="border: 1px solid salmon"></div>
   <button onclick="game.start()">start</button>
-  <button onclick="game.stop()">stop</button>
+  <button onclick="game.pause()">stop</button>
+  <button onclick="game.destroy()">reset</button>
   <script type="text/javascript">
     function Position (x, y) {
       this.x = x; this.y = y;
@@ -119,6 +124,10 @@
 
     Snake.prototype.tail = function () {
       return this.spots[0]
+    }
+
+    Snake.prototype.size = function () {
+      return this.spots.length
     }
 
     Snake.prototype.move = function () {
@@ -210,6 +219,32 @@
       this.snake = null
       this.state = null
       this.interval = 500
+      this.stepCount = 0
+      this.keydownHandler = null
+    }
+
+    Game.prototype.init = function () {
+      this.setState(GameState.init)
+
+      this.playground = new Playground()
+      this.snake = this.createSnake()
+      this.initHandler()
+      this.createFoods()
+    }
+
+    Game.prototype.destroy = function () {
+      this.state = GameState.stop
+      // 解除事件
+      this.playground.el.removeEventListener('keydown', this.keydownHandler)
+      // 删除 dom
+      this.snake.spots.forEach(spots => {
+        spots.suicide()
+      })
+      this.foods.forEach(food => {
+        food.suicide()
+      })
+      // 数据清空
+      Game.apply(this)
       this.init()
     }
 
@@ -229,7 +264,12 @@
     }
 
     // TODO: update panel
-    Game.prototype.updatePanel = function () {}
+    Game.prototype.updatePanel = function () {
+      const panel = document.forms.panel
+      panel.gameState.value = this.state
+      panel.snakeLength.value = this.snake.size()
+      panel.stepCount.value = this.stepCount
+    }
 
     Game.prototype.createSnake = function () {
       const playground = this.playground
@@ -241,17 +281,6 @@
         ...body
       )
       return snake
-    }
-
-    Game.prototype.init = function () {
-      this.setState(GameState.init)
-
-      this.playground = new Playground()
-      const snake = this.createSnake()
-      this.snake = snake
-      this.initHandler()
-      this.createFoods()
-      // console.table(this.playground.blocks)
     }
 
     Game.prototype.createFoods = function (num = 10) {
@@ -297,26 +326,29 @@
     }
 
     Game.prototype.initHandler = function () {
+      this.keydownHandler = this.keydown.bind(this)
+      this.playground.el.addEventListener("keydown", this.keydownHandler)
+    }
+
+    Game.prototype.keydown = function(e) {
       const snake = this.snake
-      this.playground.el.addEventListener("keydown", function(e) {
-        const step = snake.step
-        switch(e.key) {
-          case 'ArrowDown':
-            snake.setDelta(0, step)
-            break
-          case 'ArrowUp':
-            snake.setDelta(0, -step)
-            break;
-          case 'ArrowLeft':
-            snake.setDelta(-step, 0)
-            break
-          case 'ArrowRight':
-            snake.setDelta(step, 0)
-            break
-          default:
-        }
-        return false
-      })
+      const step = snake.step
+      switch(e.key) {
+        case 'ArrowDown':
+          snake.setDelta(0, step)
+          break
+        case 'ArrowUp':
+          snake.setDelta(0, -step)
+          break;
+        case 'ArrowLeft':
+          snake.setDelta(-step, 0)
+          break
+        case 'ArrowRight':
+          snake.setDelta(step, 0)
+          break
+        default:
+      }
+      return false
     }
 
     Game.prototype.start = function () {
@@ -336,6 +368,9 @@
         if (moveState === MoveState.crash) {
           this.setState(GameState.failure)
         }
+        if (moveState === MoveState.forward) {
+          this.stepCount++
+        }
 
         // 检测前方是否存在食物
         const head = this.snake.head()
@@ -351,7 +386,8 @@
           }
         }
       }
-
+      // 更新面板数据
+      this.updatePanel()
       if (this.state === GameState.running) {
         window.requestAnimationFrame(this.run.bind(this));
       }
@@ -367,6 +403,7 @@
   </script>
   <script>
     const game = new Game()
+    game.init()
   </script>
 </body>
 </html>
