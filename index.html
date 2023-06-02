@@ -7,6 +7,12 @@
   <title>Document</title>
 
   <style type="text/css">
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
     div, ul, li {
       margin: 0;
       padding: 0;
@@ -15,6 +21,9 @@
 
     ul, li {
       list-style: none;
+    }
+    [name=panel] {
+      margin-top: 30px
     }
 
     #playground {
@@ -61,10 +70,12 @@
     </ul>
   </form>
   <div id="playground" tabindex="0" border-collapse="none"></div>
-
-  <button onclick="game.start()">start</button>
-  <button onclick="game.pause()">stop</button>
-  <button onclick="game.destroy()">reset</button>
+  <div>
+    <button onclick="game.start()">start</button>
+    <button onclick="game.pause()">stop</button>
+    <button onclick="game.destroy()">reset</button>
+  </div>
+  <hr>
   <canvas id="controller"></canvas>
   <script type="text/javascript">
     function Position (x, y) {
@@ -77,6 +88,13 @@
 
     Position.prototype.get = function (x, y) {
       return [this.x, this.y]
+    }
+
+    const Direction = {
+      up: 0,
+      right: 1,
+      down: 2,
+      left: 3
     }
 
     function Spot (parent, position) {
@@ -132,6 +150,22 @@
     Snake.prototype.setDelta = function (deltaX, deltaY) {
       this.deltaX = deltaX
       this.deltaY = deltaY
+    }
+
+    Snake.prototype.setDirection = function (direction) {
+      const step = this.step
+      debugger
+      switch (direction) {
+        case Direction.up: this.setDelta(0, -step)
+          break
+        case Direction.right: this.setDelta(step, 0)
+          break
+        case Direction.down: this.setDelta(0, step)
+          break
+        case Direction.left: this.setDelta(-step, 0)
+          break
+        default:
+      }
     }
 
     Snake.prototype.head = function () {
@@ -252,7 +286,7 @@
     Game.prototype.init = function () {
       this.setState(GameState.init)
 
-      this.playground = new Playground()
+      this.playground = new Playground(370, 560)
       this.snake = this.createSnake()
       this.initHandler()
       this.createFoods()
@@ -359,19 +393,18 @@
 
     Game.prototype.keydown = function(e) {
       const snake = this.snake
-      const step = snake.step
       switch(e.key) {
         case 'ArrowDown':
-          snake.setDelta(0, step)
+          snake.setDirection(Direction.down)
           break
         case 'ArrowUp':
-          snake.setDelta(0, -step)
+          snake.setDirection(Direction.up)
           break;
         case 'ArrowLeft':
-          snake.setDelta(-step, 0)
+          snake.setDirection(Direction.left)
           break
         case 'ArrowRight':
-          snake.setDelta(step, 0)
+          snake.setDirection(Direction.right)
           break
         default:
       }
@@ -456,9 +489,9 @@
       return [res1, res2]
     }
 
-    (function (canvas) {
-      const width = 300
-      const height = 300
+    (function (canvas, game) {
+      const width = 220
+      const height = 220
       const r1 = 100
       const r2 = 20
       canvas.width = width
@@ -509,7 +542,34 @@
       ctx.lineTo(...p8)
 
       ctx.stroke()
-    })(document.getElementById('controller'))
+
+      canvas.addEventListener('click', function (e) {
+        if (game.state !== GameState.running) {
+          return
+        }
+        const { offsetX, offsetY } = e
+        const leftSide = Math.pow(offsetX - heart.x, 2) + Math.pow(offsetY - heart.y, 2)
+        // 大圆以外, 小圆以内
+        if (leftSide > r1 * r1 || leftSide < r2 * r2) {
+          return
+        }
+
+        // 判断点击上下左右
+        if (offsetY > offsetX) {
+          if (offsetY > height - offsetX) {
+            game.snake.setDirection(Direction.down)
+          } else {
+            game.snake.setDirection(Direction.left)
+          }
+        } else {
+          if (offsetY > height - offsetX) {
+            game.snake.setDirection(Direction.right)
+          } else {
+            game.snake.setDirection(Direction.up)
+          }
+        }
+      })
+    })(document.getElementById('controller'), game)
   </script>
 </body>
 </html>
