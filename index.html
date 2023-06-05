@@ -544,11 +544,11 @@
 
       ctx.moveTo(heart.x + r2, heart.y);
       ctx.beginPath()
-      ctx.fillStyle = '#555'
+      ctx.fillStyle = 'red'
       ctx.arc(heart.x, heart.y, r2, 0, Math.PI * 2, true);
       ctx.fill()
 
-      drawText(ctx, heart, 'R', '#fff')
+      drawText(ctx, heart, 'P', '#fff')
 
       // 绘制控制按钮
       const startHeart = new Position((heart.x - r1) / 2, height / 2)
@@ -563,19 +563,21 @@
       const stopHeart = new Position(width - (heart.x - r1) / 2, height / 2)
       ctx.moveTo(stopHeart.x + r2, stopHeart.y)
       ctx.beginPath()
-      ctx.fillStyle = 'red'
+      ctx.fillStyle = '#555'
       ctx.arc(stopHeart.x, stopHeart.y, r2, 0, Math.PI * 2, true)
       ctx.fill()
 
-      const oldStrokeStyle = ctx.strokeStyle
+      ctx.save()
       ctx.strokeStyle = '#fff'
-      ctx.strokeText('P', stopHeart.x - ctx.measureText("P").width / 2, stopHeart.y);
-      ctx.strokeStyle = oldStrokeStyle
+      ctx.strokeText('R', stopHeart.x - ctx.measureText("P").width / 2, stopHeart.y);
+      ctx.restore()
+
       // 圆的对角线
       // line1 y = x - height / 2
       // line2 y = heart.x + height / 2 - x
       const [ p1, p2, p3, p4 ] = calculateCube(heart, r1)
       const [p5, p6, p7, p8] = calculateCube(heart, r2)
+      ctx.beginPath()
 
       ctx.moveTo(...p1)
       ctx.lineTo(...p5)
@@ -592,7 +594,7 @@
         const { offsetX, offsetY } = e
         const leftSide = Math.pow(offsetX - heart.x, 2) + Math.pow(offsetY - heart.y, 2)
         if (leftSide < r2 * r2) {
-          game.destroy()
+          game.stop()
           return
         }
 
@@ -603,7 +605,7 @@
           }
 
           if (Math.pow(offsetX - stopHeart.x, 2) + Math.pow(offsetY - stopHeart.y, 2) < r2 * r2) {
-            game.stop()
+            game.destroy()
           }
           return
         }
