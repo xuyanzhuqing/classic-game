@@ -3,16 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Document</title>
 
   <style type="text/css">
-    body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
     div, ul, li {
       margin: 0;
       padding: 0;
@@ -22,8 +16,12 @@
     ul, li {
       list-style: none;
     }
-    [name=panel] {
-      margin-top: 30px
+
+    .game-box {
+      display: flex;
+      width: 100%;
+      flex-direction: column;
+      justify-content: space-around;
     }
 
     #playground {
@@ -47,10 +45,10 @@
 
     .panel {
       display: flex;
-      width: 300px;
       justify-content: space-around;
       list-style: none;
       font-size: 10px;
+      padding-top: 50px;
     }
 
     .panel input {
@@ -60,22 +58,39 @@
     }
 
   </style>
+  <style>
+    html {
+      width: 100%;
+      height: 100%;
+    }
+    @media screen and (orientation: portrait) {
+    /*竖屏 css*/
+      body {
+        display: flex;
+        height: 100%;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+    @media screen and (orientation: landscape) {
+      body {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+      }
+    }
+  </style>
 </head>
 <body>
-  <form name="panel">
-    <ul class="panel">
-      <li>状态：<input name="gameState" disabled/></li>
-      <li>长度：<input name="snakeLength" disabled/></li>
-      <li>步数：<input name="stepCount" disabled/></li>
-    </ul>
-  </form>
-  <div id="playground" tabindex="0" border-collapse="none"></div>
-  <div>
-    <button onclick="game.start()">start</button>
-    <button onclick="game.pause()">stop</button>
-    <button onclick="game.destroy()">reset</button>
+  <div class="game-box">
+    <form name="panel" class="panel">
+      <div>状态：<input name="gameState" disabled/></div>
+      <div>长度：<input name="snakeLength" disabled/></div>
+      <div>步数：<input name="stepCount" disabled/></div>
+    </form>
+    <div id="playground" tabindex="0" border-collapse="none"></div>
   </div>
-  <hr>
   <canvas id="controller"></canvas>
   <script type="text/javascript">
     function Position (x, y) {
@@ -293,8 +308,8 @@
     Game.prototype.init = function () {
       this.setState(GameState.init)
 
-      this.playground = new Playground()
-      // this.playground = new Playground(370, 560)
+      // this.playground = new Playground()
+      this.playground = new Playground(370, 560)
       this.snake = this.createSnake()
       this.initHandler()
       this.createFoods()
@@ -490,104 +505,99 @@
     const game = new Game().init()
   </script>
   <script>
-    // 解决 y = x 与圆相交的一元二次函数参数
-    function positiveLineOnCircle (heart, r) {
-      const a = 1
-      const b = -heart.x - heart.y
-      const c = (Math.pow(heart.x, 2) + Math.pow(heart.y, 2) - Math.pow(r, 2)) / 2
-      return [a, b, c]
-    }
-
-    // 解决 y = n - x 与圆相交的一元二次函数参数
-    function negativeLineOnCircle (heart, r, height) {
-      const a = 1
-      const b = -(heart.x + (height - heart.y))
-      const c = (Math.pow(heart.x, 2) + Math.pow((height - heart.y), 2) - Math.pow(r, 2)) / 2
-      return [a, b, c]
-    }
-
-    function resolveTwiceMeta(a, b, c) {
-      const delta = Math.sqrt(Math.pow(b, 2) - 4 * a * c)
-      if (delta < 0) throw new Error('Invalid')
-      const res1 = (-b + delta) / 2 * a
-      const res2 = (-b - delta) / 2 * a
-      return [res1, res2]
+    function calculateCube(heart, r) {
+      const d = Math.sqrt(r**2 / 2)
+      return [
+        [heart.x - d, heart.y - d],
+        [heart.x + d, heart.y - d],
+        [heart.x + d, heart.y + d],
+        [heart.x - d, heart.y + d],
+      ]
     }
 
     (function (canvas, game) {
-      const width = 220
       const height = 220
+      const width = height * 2
       const r1 = 100
       const r2 = 20
       canvas.width = width
       canvas.height = height
+      canvas.style.height = height + 'px'
       const ctx = canvas.getContext('2d')
 
       const heart = new Position(width / 2, height / 2)
       ctx.beginPath()
+
+      // 外部大椭圆
+      ctx.ellipse(heart.x, heart.y, width / 2, heart.y, 0, 0, Math.PI * 2, true)
+      ctx.moveTo(heart.x + r1, heart.y);
       ctx.arc(heart.x, heart.y, r1, 0, Math.PI * 2, true);
       ctx.moveTo(heart.x + r2, heart.y);
       ctx.arc(heart.x, heart.y, r2, 0, Math.PI * 2, true);
+      var text = ctx.measureText("R")
+      ctx.strokeText('R', heart.x - ctx.measureText("R").width / 2, heart.y);
 
-      // line 1
-      // 已知
-      // (x - hx)^2 + (x - hy)^2 = r1^2
-      // y = x
-      // (x^2 - 2*hx*x + hx^2) + (x^2 - 2*hy*x + hy^2) = r1^2
-      // x^2 - hx*x - hy*x + (hx^2 + hy^2 - r1 ^2) / 2 = 0
-      const [x1, x2] = resolveTwiceMeta(...positiveLineOnCircle(heart, r1))
-      const [x3, x4] = resolveTwiceMeta(...positiveLineOnCircle(heart, r2))
+      // 绘制控制按钮
+      ctx.fillStyle="#ff0";//设置填充颜色
+      const startHeart = new Position((heart.x - r1) / 2, height / 2)
+      ctx.moveTo(startHeart.x + r2, startHeart.y)
+      ctx.arc(startHeart.x, startHeart.y, r2, 0, Math.PI * 2, true)
+      ctx.strokeText('S', startHeart.x - ctx.measureText("S").width / 2, startHeart.y);
 
-      const p1 = [x1, x1]
-      const p2 = [x2, x2]
-      const p3 = [x3, x3]
-      const p4 = [x4, x4]
+      const stopHeart = new Position(width - (heart.x - r1) / 2, height / 2)
+      ctx.moveTo(stopHeart.x + r2, stopHeart.y)
+      ctx.arc(stopHeart.x, stopHeart.y, r2, 0, Math.PI * 2, true)
+      ctx.strokeText('P', stopHeart.x - ctx.measureText("P").width / 2, stopHeart.y);
+      // 圆的对角线
+      // line1 y = x - height / 2
+      // line2 y = heart.x + height / 2 - x
+      const [ p1, p2, p3, p4 ] = calculateCube(heart, r1)
+      const [p5, p6, p7, p8] = calculateCube(heart, r2)
+
       ctx.moveTo(...p1)
-      ctx.lineTo(...p3)
+      ctx.lineTo(...p5)
       ctx.moveTo(...p2)
-      ctx.lineTo(...p4)
-
-      // line 2
-      // (x - hx)^2 + (y - hy)^2 = 100 ^2
-      // y = height - x
-      // (x - hx)^2 + (height - x - hy)^2 = 100 ^ 2
-      // x^2 - 2*hx*x + hx^2 + (height - hy)^2 - 2*(height - hy)*x + x^2 - r1^2 = 0
-      // 2*x^2 - 2*hx*x - 2*(height - hy)*x + (hx^2 + (height - hy)^2 - r1^2) = 0
-      // x^2 - (hx + (height - hy))*x + (hx^2 + (height - hy)^2 - r1^2)/2 = 0
-      const [x5, x6] = resolveTwiceMeta(...negativeLineOnCircle(heart, r1, height))
-      const [x7, x8] = resolveTwiceMeta(...negativeLineOnCircle(heart, r2, height))
-
-      const p5 = [x5, height - x5]
-      const p6 = [x6, height - x6]
-      const p7 = [x7, height - x7]
-      const p8 = [x8, height - x8]
-      ctx.moveTo(...p5)
+      ctx.lineTo(...p6)
+      ctx.moveTo(...p3)
       ctx.lineTo(...p7)
-      ctx.moveTo(...p6)
+      ctx.moveTo(...p4)
       ctx.lineTo(...p8)
 
       ctx.stroke()
 
       canvas.addEventListener('click', function (e) {
-        if (game.state !== GameState.running) {
-          return
-        }
         const { offsetX, offsetY } = e
         const leftSide = Math.pow(offsetX - heart.x, 2) + Math.pow(offsetY - heart.y, 2)
+        if (leftSide < r2 * r2) {
+          game.destroy()
+          return
+        }
+
         // 大圆以外, 小圆以内
-        if (leftSide > r1 * r1 || leftSide < r2 * r2) {
+        if (leftSide > r1 * r1) {
+          if (Math.pow(offsetX - startHeart.x, 2) + Math.pow(offsetY - startHeart.y, 2) < r2 * r2) {
+            game.start()
+          }
+
+          if (Math.pow(offsetX - stopHeart.x, 2) + Math.pow(offsetY - stopHeart.y, 2) < r2 * r2) {
+            game.stop()
+          }
+          return
+        }
+
+        if (game.state !== GameState.running) {
           return
         }
 
         // 判断点击上下左右
-        if (offsetY > offsetX) {
-          if (offsetY > height - offsetX) {
+        if (offsetY > offsetX - height / 2) {
+          if (offsetY > heart.x + height / 2 - offsetX) {
             game.setDirection(Direction.down)
           } else {
             game.setDirection(Direction.left)
           }
         } else {
-          if (offsetY > height - offsetX) {
+          if (offsetY > heart.x + height / 2 - offsetX) {
             game.setDirection(Direction.right)
           } else {
             game.setDirection(Direction.up)
