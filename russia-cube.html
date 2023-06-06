@@ -154,9 +154,28 @@
         default:
       }
       const len = this.dots.length
+      const blocks = this.parent.blocks
+      // 检测左右两侧是否可以移动
       for (let i = 0; i < len; i++) {
         const dot = this.dots[i]
-        dot.setPosition(dot.position.x + deltaX, dot.position.y + deltaY)
+        const x = dot.position.x + deltaX
+        const y = dot.position.y + deltaY
+
+        if (
+          x < 0 ||
+          x > this.parent.width - Dot.size ||
+          blocks[y/Dot.size][x/Dot.size - 1] ||
+          blocks[y/Dot.size][x/Dot.size + 1]
+        ) {
+          deltaX = 0
+        }
+      }
+
+      for (let i = 0; i < len; i++) {
+        const dot = this.dots[i]
+        const x = dot.position.x + deltaX
+        const y = dot.position.y + deltaY
+        dot.setPosition(x, y)
         dot.move()
       }
     }
@@ -318,7 +337,7 @@
         return
       }
       this.setState(GameState.running)
-      this.makeCube()
+      this.cube === null && this.makeCube()
       this.animationFrameRes = window.requestAnimationFrame(this.run.bind(this))
       this.playground.el.focus()
     }
@@ -342,7 +361,10 @@
 
       if (this.previousTimeStamp == null || elapsed > this.interval) {
         this.previousTimeStamp = timestamp;
-        const cubeState = this.cube.tryMove()
+        let cubeState = CubeState.unstable
+        if (this.cube) {
+          cubeState = this.cube.tryMove()
+        }
         if (cubeState === CubeState.stable) {
           this.cube.mark(true)
           // 检测是否有方块到顶了
@@ -368,7 +390,6 @@
 
     Game.prototype.over = function () {
       this.setState(GameState.failure)
-      window.cancelAnimationFrame(this.animationFrameRes)
       window.alert('game over')
     }
 
@@ -389,6 +410,7 @@
         cube.suicide()
       })
       // 数据清空
+      this.animationFrameRes && window.cancelAnimationFrame(this.animationFrameRes)
       Game.apply(this)
       this.init()
       this.updatePanel()
