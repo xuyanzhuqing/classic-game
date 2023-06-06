@@ -30,9 +30,10 @@
   </style>
 </head>
 <body>
-  <div id="playground"></div>
+  <div id="playground" tabindex="0"></div>
   <button onclick="game.start()">start</button>
   <button onclick="game.pause()">pause</button>
+  <button onclick="game.destroy()">reset</button>
   <canvas id="controller" style="display: none;"></canvas>
   <script id="common">
     function Position (x, y) {
@@ -98,6 +99,10 @@
       this.state = state
     }
 
+    Cube.prototype.suicide = function () {
+      this.dots.forEach(dot => dot.suicide())
+    }
+
     Cube.prototype.mark = function (bool = true) {
       const blocks = this.parent.blocks
       this.dots.forEach(dot => {
@@ -111,26 +116,49 @@
       return this.dots
     }
 
-    Cube.prototype.move = function () {
+    Cube.prototype.tryMove = function (direction = Direction.down) {
       // 如果存在一个 dot 下方有实体，或者到底了
       const len = this.dots.length
+      let state = this.state
       for (let i = 0; i < len; i++) {
         const dot = this.dots[i]
         const x = dot.position.x / Dot.size
         const y = dot.position.y / Dot.size + 1
         if (dot.position.y + Dot.size >= this.parent.height || this.parent.blocks[y][x]) {
-          this.state = CubeState.stable
+          state = CubeState.stable
           break
         }
       }
-      if (this.state == CubeState.unstable) {
-        for (let i = 0; i < len; i++) {
-          const dot = this.dots[i]
-          dot.setPosition(dot.position.x, dot.position.y + Dot.size)
-          dot.move()
-        }
+      this.setState(state)
+      if (state == CubeState.unstable) {
+        this.move(direction)
       }
-      return this
+      return state
+    }
+
+    Cube.prototype.move = function (direction = Direction.down) {
+      let deltaX = deltaY = 0
+      switch (direction) {
+        case Direction.up:
+            this.rotate()
+          break
+        case Direction.right:
+            deltaX += Dot.size
+          break
+        case Direction.down:
+            deltaY += Dot.size
+          break
+        case Direction.left:
+            deltaX -= Dot.size
+          break
+        default:
+      }
+      const len = this.dots.length
+      for (let i = 0; i < len; i++) {
+        const dot = this.dots[i]
+        dot.setPosition(dot.position.x + deltaX, dot.position.y + deltaY)
+        dot.move()
+      }
     }
 
     function Stone (parent, position) {
@@ -218,6 +246,7 @@
     }
 
     function Game () {
+      this.cubes = []
       this.cube = null
       this.startTime = null
       this.previousTimeStamp = null
@@ -234,6 +263,7 @@
       this.speedupIntervalDuration = 2000
       this.cubeCount = 0
       this.keydownHandler = null
+      this.animationFrameRes = null
     }
 
     Game.prototype.init = function () {
@@ -289,13 +319,14 @@
       }
       this.setState(GameState.running)
       this.makeCube()
-      window.requestAnimationFrame(this.run.bind(this))
+      this.animationFrameRes = window.requestAnimationFrame(this.run.bind(this))
       this.playground.el.focus()
     }
 
     Game.prototype.makeCube = function () {
       const cube = Cube.random(this.playground)
       this.cube = cube
+      this.cubes.push(cube)
       return cube
     }
 
@@ -311,9 +342,8 @@
 
       if (this.previousTimeStamp == null || elapsed > this.interval) {
         this.previousTimeStamp = timestamp;
-        this.cube.move()
-
-        if (this.cube.state === CubeState.stable) {
+        const cubeState = this.cube.tryMove()
+        if (cubeState === CubeState.stable) {
           this.cube.mark(true)
           // 检测是否有方块到顶了
           const len = this.cube.dots.length
@@ -324,7 +354,6 @@
               break;
             }
           }
-
           if (this.state === GameState.running) {
             this.makeCube()
           }
@@ -339,6 +368,7 @@
 
     Game.prototype.over = function () {
       this.setState(GameState.failure)
+      window.cancelAnimationFrame(this.animationFrameRes)
       window.alert('game over')
     }
 
@@ -350,7 +380,24 @@
       this.setState(GameState.stop)
     }
 
-    Game.prototype.setDirection = function (direction) {}
+    Game.prototype.destroy = function () {
+      this.state = GameState.stop
+      // 解除事件
+      this.playground.el.removeEventListener('keydown', this.keydownHandler)
+      // 删除 dom
+      this.cubes.forEach(cube => {
+        cube.suicide()
+      })
+      // 数据清空
+      Game.apply(this)
+      this.init()
+      this.updatePanel()
+    }
+
+    Game.prototype.setDirection = function (direction) {
+      this.cube.tryMove(direction)
+    }
+
     Game.prototype.updatePanel = function (direction) {}
 
     const game = new Game().init()
