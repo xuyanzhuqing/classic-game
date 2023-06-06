@@ -17,13 +17,6 @@
       list-style: none;
     }
 
-    .game-box {
-      display: flex;
-      width: 100%;
-      flex-direction: column;
-      justify-content: space-around;
-    }
-
     #playground {
       outline: none;
       border: 1px solid dimgray
@@ -72,12 +65,20 @@
         align-items: center;
         justify-content: space-between;
       }
+      .game-box {
+        display: flex;
+        width: 100%;
+        flex-direction: column;
+        justify-content: space-around;
+        align-items: center;
+      }
     }
     @media screen and (orientation: landscape) {
       body {
         display: flex;
         flex-direction: row;
         justify-content: space-between;
+        align-items: center;
       }
     }
   </style>
@@ -158,6 +159,7 @@
       this.deltaY = 0
       this.lastDeltaX = this.deltaX
       this.lastDeltaY = this.deltaY
+      this.direction = null
     }
 
     Snake.size = 10
@@ -169,6 +171,7 @@
 
     Snake.prototype.setDirection = function (direction) {
       const step = this.step
+      this.direction = direction
       switch (direction) {
         case Direction.up: this.setDelta(0, -step)
           break
@@ -330,6 +333,7 @@
       // 数据清空
       Game.apply(this)
       this.init()
+      this.updatePanel()
     }
 
     Game.prototype.setState = function (state) {
@@ -370,7 +374,8 @@
     Game.prototype.setDirection = function (direction) {
       // 控制加速时长，加速间隔
       if (Date.now() - this.lastSetDirectionStamp < this.speedupInterval) {
-        const interval = this.interval - this.speedupIntervalDelta
+        const flag = direction === this.snake.direction ? -1 : 1
+        const interval = this.interval + flag * this.speedupIntervalDelta
         if (interval >= this.normalInterval * 0.1) {
           this.interval = interval
         }
@@ -447,6 +452,9 @@
     }
 
     Game.prototype.start = function () {
+      if (this.state === GameState.running) {
+        return
+      }
       this.setState(GameState.running)
       window.requestAnimationFrame(this.run.bind(this))
       this.playground.el.focus()
