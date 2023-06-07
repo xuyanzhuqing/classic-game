@@ -6,6 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Document</title>
   <style>
+    html, body {
+      width: 100%
+    }
+
     div, ul, li {
       margin: 0;
       padding: 0;
@@ -17,24 +21,29 @@
     }
 
     #playground {
+      margin-top: 50px;
       outline: none;
       border: 1px solid dimgray
     }
 
     .dot {
       position: absolute;
-      width: 10px;
-      height: 10px;
       background: lightblue;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
   </style>
 </head>
 <body>
-  <div id="playground" tabindex="0"></div>
-  <button onclick="game.start()">start</button>
+  <!-- <button onclick="game.start()">start</button>
   <button onclick="game.pause()">pause</button>
-  <button onclick="game.destroy()">reset</button>
-  <canvas id="controller" style="display: none;"></canvas>
+  <button onclick="game.destroy()">reset</button> -->
+  <div id="playground" tabindex="0"></div>
+  <canvas id="controller"></canvas>
   <script id="common">
     function Position (x, y) {
       this.x = x; this.y = y;
@@ -55,19 +64,19 @@
       left: 3
     }
   </script>
-  <script id="cube">
-
+  <script id="dot">
     function Dot (parent, position) {
       this.position = position;
       const el = document.createElement("div")
       el.classList.add("dot")
+      el.style.cssText = `width: ${ Dot.size }px; height: ${Dot.size}px`
       this.parent = parent
       parent.el.appendChild(el)
       this.el = el
       this.move()
     }
 
-    Dot.size = 10
+    Dot.size = 20
 
     Dot.prototype.move = function () {
       const { x, y } = this.position
@@ -82,14 +91,14 @@
       this.position.x = x
       this.position.y = y
     }
-
+  </script>
+  <script id="cube">
     const CubeState = {
       unstable: 0,
       stable: 1
     }
 
-    function Cube (parent, position) {
-      this.heart = position
+    function Cube (parent) {
       this.parent = parent
       this.dots = []
       this.state = CubeState.unstable
@@ -112,9 +121,7 @@
       })
     }
 
-    Cube.prototype.rotate = function () {
-      return this.dots
-    }
+    Cube.prototype.rotate = function () {}
 
     Cube.prototype.tryMove = function (direction = Direction.down) {
       // 如果存在一个 dot 下方有实体，或者到底了
@@ -142,11 +149,25 @@
       return state
     }
 
+    Cube.prototype.rotate = function () {
+      const len = this.dots.length
+      const { x: x0, y: y0 } = this.getCenter()
+      const sin = Math.sin(Math.PI / 2)
+      const cos = Math.cos(Math.PI / 2)
+      for (let i = 0; i < len; i++) {
+        const { x, y } = this.dots[i].position
+        // https://wenku.baidu.com/view/434e1c6a497302768e9951e79b89680202d86b71.html?_wkts_=1686114508666
+        const x1 = (x - x0) * cos - (y -y0) * sin + x0
+        const y1 = (x - x0) * sin + (y - y0) * cos + y0
+        this.dots[i].setPosition(x1, y1)
+      }
+      this.tryMove(Direction.up)
+    }
+
     Cube.prototype.move = function (direction = Direction.down) {
       let deltaX = deltaY = 0
       switch (direction) {
         case Direction.up:
-            this.rotate()
           break
         case Direction.right:
             deltaX += Dot.size
@@ -189,7 +210,7 @@
 
     function Stone (parent, position) {
       position.y -= Dot.size * 2
-      Cube.call(this, parent, position)
+      Cube.call(this, parent)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
         new Dot(parent, new Position(position.x + Dot.size, position.y)),
@@ -197,23 +218,41 @@
         new Dot(parent, new Position(position.x + Dot.size, position.y + Dot.size)),
       ]
     }
+
+    Stone.prototype.getCenter = function () {
+      return this.dots[2].position
+    }
+
     function Snake (parent, position) {
       position.y -= Dot.size * 1
-      Cube.call(this, parent, position)
+      Cube.call(this, parent)
       this.dots = new Array(5).fill(undefined).map((v, i) => {
         return new Dot(parent, new Position(position.x + i * Dot.size, position.y))
       })
     }
+
+    Snake.prototype.getCenter = function () {
+      const len = this.dots.length
+      const half = Math.floor(len / 2)
+      const center = this.dots[half]
+      return center.position
+    }
+
     function Bee (parent, position) {
       position.y -= Dot.size * 1
-      Cube.call(this, parent, position)
+      Cube.call(this, parent)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
       ]
     }
+
+    Bee.prototype.getCenter = function () {
+      return this.dots[0].position
+    }
+
     function Zebra (parent, position) {
       position.y -= Dot.size * 2
-      Cube.call(this, parent, position)
+      Cube.call(this, parent)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
         new Dot(parent, new Position(position.x, position.y + Dot.size)),
@@ -221,18 +260,28 @@
         new Dot(parent, new Position(position.x + Dot.size, position.y + Dot.size * 2)),
       ]
     }
+
+    Zebra.prototype.getCenter = function () {
+      return this.dots[1].position
+    }
+
     function SeaHorse (parent, position) {
       position.y -= Dot.size * 2
-      Cube.call(this, parent, position)
+      Cube.call(this, parent)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
       ].concat(new Array(3).fill(undefined).map((v, i) => {
         return new Dot(parent, new Position(position.x + Dot.size * i, position.y + Dot.size))
       }))
     }
+
+    SeaHorse.prototype.getCenter = function () {
+      return this.dots[1].position
+    }
+
     function Tank (parent, position) {
       position.y -= Dot.size * 2
-      Cube.call(this, parent, position)
+      Cube.call(this, parent)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
         new Dot(parent, new Position(position.x, position.y + Dot.size)),
@@ -241,21 +290,27 @@
       ]
     }
 
+    Tank.prototype.getCenter = function () {
+      return this.dots[1].position
+    }
+
     // 批量组合动态继承
-    (function extend (targetCtor, ...sourceCtors) {
+    function extend (targetCtor, ...sourceCtors) {
       for (var i = 0; i < sourceCtors.length; i++) {
         const sourceCtor = sourceCtors[i];
-        sourceCtor.prototype = Object.create(targetCtor.prototype)
+        const oldPrototype = sourceCtor.prototype
+        sourceCtor.prototype = Object.assign(Object.create(targetCtor.prototype), oldPrototype)
         sourceCtor.prototype.constructor = sourceCtor
       }
       targetCtor.random = function (parent) {
         const index = Math.floor(Math.random() * sourceCtors.length)
         const position = new Position(parent.width * 0.5, 0)
-        const ctor = sourceCtors[index]
-        const cube = new Snake(parent, position)
+        const Ctor = sourceCtors[index]
+        const cube = new Ctor(parent, position)
         return cube
       }
-    })(Cube, Stone, Snake, Bee, Zebra, SeaHorse, Tank)
+    }
+    extend(Cube, Stone, Snake, Bee, Zebra, SeaHorse, Tank)
   </script>
   <script>
     function Playground (width = 200, height = 100) {
@@ -303,7 +358,7 @@
 
     Game.prototype.init = function () {
       this.setState(GameState.init)
-      // this.playground = new Playground(370, 560)
+      // this.playground = new Playground(380, 560)
       this.playground = new Playground()
       this.initHandler()
       return this
@@ -464,6 +519,9 @@
     }
 
     Game.prototype.setDirection = function (direction) {
+      if (direction == Direction.up) {
+        this.cube.rotate()
+      }
       this.cube.tryMove(direction)
     }
 
