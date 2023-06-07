@@ -124,7 +124,13 @@
         const dot = this.dots[i]
         const x = dot.position.x / Dot.size
         const y = dot.position.y / Dot.size + 1
-        if (dot.position.y + Dot.size >= this.parent.height || this.parent.blocks[y][x]) {
+        const nextY = dot.position.y + Dot.size
+        // 还未出现在屏幕上的点跳过
+        if (nextY <= 0) {
+          continue
+        }
+
+        if (nextY >= this.parent.height || this.parent.blocks[y][x]) {
           state = CubeState.stable
           break
         }
@@ -160,7 +166,7 @@
         const dot = this.dots[i]
         const x = dot.position.x + deltaX
         const y = dot.position.y + deltaY
-
+        if(y <= 0) continue
         if (
           x < 0 ||
           x > this.parent.width - Dot.size ||
@@ -168,6 +174,7 @@
           blocks[y/Dot.size][x/Dot.size + 1]
         ) {
           deltaX = 0
+          break
         }
       }
 
@@ -181,6 +188,7 @@
     }
 
     function Stone (parent, position) {
+      position.y -= Dot.size * 2
       Cube.call(this, parent, position)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
@@ -190,15 +198,21 @@
       ]
     }
     function Snake (parent, position) {
+      position.y -= Dot.size * 1
       Cube.call(this, parent, position)
       this.dots = new Array(5).fill(undefined).map((v, i) => {
         return new Dot(parent, new Position(position.x + i * Dot.size, position.y))
       })
     }
     function Bee (parent, position) {
+      position.y -= Dot.size * 1
       Cube.call(this, parent, position)
+      this.dots = [
+        new Dot(parent, new Position(position.x, position.y)),
+      ]
     }
     function Zebra (parent, position) {
+      position.y -= Dot.size * 2
       Cube.call(this, parent, position)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
@@ -208,6 +222,7 @@
       ]
     }
     function SeaHorse (parent, position) {
+      position.y -= Dot.size * 2
       Cube.call(this, parent, position)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
@@ -216,7 +231,7 @@
       }))
     }
     function Tank (parent, position) {
-      Cube.call(this, parent, position)
+      position.y -= Dot.size * 2
       Cube.call(this, parent, position)
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
@@ -236,7 +251,8 @@
       targetCtor.random = function (parent) {
         const index = Math.floor(Math.random() * sourceCtors.length)
         const position = new Position(parent.width * 0.5, 0)
-        const cube = new sourceCtors[index](parent, position)
+        const ctor = sourceCtors[index]
+        const cube = new Snake(parent, position)
         return cube
       }
     })(Cube, Stone, Snake, Bee, Zebra, SeaHorse, Tank)
@@ -250,7 +266,7 @@
       this.el.style.height = height + "px"
       // 生成空白区块
       const blocks = new Array(this.height / Dot.size)
-        .fill(undefined)
+        .fill(false)
         .map(() => new Array(this.width / Dot.size))
       this.blocks = blocks
     }
@@ -265,7 +281,7 @@
     }
 
     function Game () {
-      this.cubes = []
+      this.dots = []
       this.cube = null
       this.startTime = null
       this.previousTimeStamp = null
@@ -342,10 +358,41 @@
       this.playground.el.focus()
     }
 
+    Game.prototype.clearDots = function () {
+      // 检测是否存在可以消除的 cube
+      // 精神上消灭, 上面行替代下面行
+      for (let i = this.playground.blocks.length - 1; i >= 0; i--) {
+        const row = this.playground.blocks[i]
+        let flag = true
+        for (let j = 0; j < row.length; j++) {
+          if (!row[j]) {
+            flag = false
+            break
+          }
+        }
+
+        if (flag) {
+          const prev = this.playground.blocks[i - 1]
+          for (let j = 0; j < row.length; j++) {
+            row[j] = prev[j]
+            // 肉体上消灭，移除 dom
+            this.dots[i * j].suicide()
+          }
+        }
+      }
+    }
+
+    Game.prototype.storeDots = function () {
+      const dots = this.cube.dots
+      dots.forEach(dot => {
+        const index = dot.position.x * dot.position.y / Dot.size ** 2
+        this.dots[index] = dot
+      })
+    }
+
     Game.prototype.makeCube = function () {
       const cube = Cube.random(this.playground)
       this.cube = cube
-      this.cubes.push(cube)
       return cube
     }
 
@@ -366,6 +413,7 @@
           cubeState = this.cube.tryMove()
         }
         if (cubeState === CubeState.stable) {
+          this.storeDots()
           this.cube.mark(true)
           // 检测是否有方块到顶了
           const len = this.cube.dots.length
@@ -377,6 +425,7 @@
             }
           }
           if (this.state === GameState.running) {
+            this.clearDots()
             this.makeCube()
           }
         }
@@ -406,9 +455,7 @@
       // 解除事件
       this.playground.el.removeEventListener('keydown', this.keydownHandler)
       // 删除 dom
-      this.cubes.forEach(cube => {
-        cube.suicide()
-      })
+      this.playground.el.querySelectorAll('.dot').forEach(dot => dot.remove())
       // 数据清空
       this.animationFrameRes && window.cancelAnimationFrame(this.animationFrameRes)
       Game.apply(this)
