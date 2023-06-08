@@ -34,17 +34,21 @@
     body {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: start;
     }
   </style>
 </head>
 <body>
-  <!-- <button onclick="game.start()">start</button>
-  <button onclick="game.pause()">pause</button>
-  <button onclick="game.destroy()">reset</button> -->
+  <div>
+    <button onclick="game.start()">start</button>
+    <button onclick="game.pause()">pause</button>
+    <button onclick="game.destroy()">reset</button>
+  </div>
   <div id="playground" tabindex="0"></div>
-  <canvas id="controller"></canvas>
+  <canvas id="controller" style="display: none;"></canvas>
   <script id="common">
+    const isDev = true
+
     function Position (x, y) {
       this.x = x; this.y = y;
     }
@@ -76,7 +80,7 @@
       this.move()
     }
 
-    Dot.size = 20
+    Dot.size = isDev ? 10 : 20
 
     Dot.prototype.move = function () {
       const { x, y } = this.position
@@ -90,6 +94,11 @@
     Dot.prototype.setPosition = function (x, y) {
       this.position.x = x
       this.position.y = y
+      return this
+    }
+
+    Dot.prototype.indexArray = function () {
+      return [this.position.x / Dot.size, this.position.y / Dot.size]
     }
   </script>
   <script id="cube">
@@ -115,9 +124,8 @@
     Cube.prototype.mark = function (bool = true) {
       const blocks = this.parent.blocks
       this.dots.forEach(dot => {
-        const x = dot.position.x / Dot.size
-        const y =  dot.position.y / Dot.size
-        blocks[y][x] = bool
+        const [x, y] = dot.indexArray()
+        blocks[y][x] = dot
       })
     }
 
@@ -294,6 +302,29 @@
       return this.dots[1].position
     }
 
+    // mock cube
+    function Human (parent, position) {
+      position.y -= Dot.size * 3
+      Cube.call(this, parent)
+      this.dots = [
+        ...new Array(20).fill(undefined).map((v, i) => {
+          return new Dot(parent, new Position(i * Dot.size, position.y))
+        }),
+        new Dot(parent, new Position(position.x, position.y + 1 * Dot.size)),
+        ...new Array(20).fill(undefined).map((v, i) => {
+          return new Dot(parent, new Position(i * Dot.size, position.y + Dot.size * 2))
+        }),
+        new Dot(parent, new Position(position.x + Dot.size * 3, position.y + 3 * Dot.size)),
+        ...new Array(20).fill(undefined).map((v, i) => {
+          return new Dot(parent, new Position(i * Dot.size, position.y + Dot.size * 4))
+        })
+      ]
+    }
+
+    Human.prototype.getCenter = function () {
+      return this.dots[10].position
+    }
+
     // 批量组合动态继承
     function extend (targetCtor, ...sourceCtors) {
       for (var i = 0; i < sourceCtors.length; i++) {
@@ -336,7 +367,6 @@
     }
 
     function Game () {
-      this.dots = []
       this.cube = null
       this.startTime = null
       this.previousTimeStamp = null
@@ -358,8 +388,13 @@
 
     Game.prototype.init = function () {
       this.setState(GameState.init)
-      // this.playground = new Playground(380, 560)
-      this.playground = new Playground()
+      if (isDev) {
+        this.playground = new Playground()
+      } else {
+        this.playground = new Playground(380, 560)
+      }
+
+      this.dots = new Array(this.playground.width * this.playground.height / (Dot.size ** 2))
       this.initHandler()
       return this
     }
@@ -414,10 +449,11 @@
     }
 
     Game.prototype.clearDots = function () {
+      const blocks = this.playground.blocks
       // 检测是否存在可以消除的 cube
-      // 精神上消灭, 上面行替代下面行
-      for (let i = this.playground.blocks.length - 1; i >= 0; i--) {
-        const row = this.playground.blocks[i]
+      let count = 0
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        const row = blocks[i]
         let flag = true
         for (let j = 0; j < row.length; j++) {
           if (!row[j]) {
@@ -427,22 +463,28 @@
         }
 
         if (flag) {
-          const prev = this.playground.blocks[i - 1]
+          count++
+          const prev = blocks[i - 1]
           for (let j = 0; j < row.length; j++) {
-            row[j] = prev[j]
             // 肉体上消灭，移除 dom
-            this.dots[i * j].suicide()
+            row[j].suicide()
+            // 精神上消灭, 上面行替代下面行
+            blocks[i][j] = null
           }
+          continue
+        }
+
+        // 向下移动 count 步
+        for (let j = 0; j < row.length; j++) {
+          const dot = row[j]
+          if (!dot) continue
+          const [x, y] = dot.indexArray()
+          dot.setPosition(dot.position.x, dot.position.y + Dot.size * count).move()
+          blocks[y][x] = null
+          // forward $count step
+          blocks[y + count][x] = dot
         }
       }
-    }
-
-    Game.prototype.storeDots = function () {
-      const dots = this.cube.dots
-      dots.forEach(dot => {
-        const index = dot.position.x * dot.position.y / Dot.size ** 2
-        this.dots[index] = dot
-      })
     }
 
     Game.prototype.makeCube = function () {
@@ -468,7 +510,6 @@
           cubeState = this.cube.tryMove()
         }
         if (cubeState === CubeState.stable) {
-          this.storeDots()
           this.cube.mark(true)
           // 检测是否有方块到顶了
           const len = this.cube.dots.length
@@ -521,6 +562,7 @@
     Game.prototype.setDirection = function (direction) {
       if (direction == Direction.up) {
         this.cube.rotate()
+        return
       }
       this.cube.tryMove(direction)
     }
