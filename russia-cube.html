@@ -34,20 +34,24 @@
     body {
       display: flex;
       flex-direction: column;
-      align-items: start;
+      align-items: center;
+    }
+
+    canvas {
+      user-select: none;
     }
   </style>
 </head>
 <body>
-  <div>
+  <div id="controller-btns">
     <button onclick="game.start()">start</button>
     <button onclick="game.pause()">pause</button>
     <button onclick="game.destroy()">reset</button>
   </div>
   <div id="playground" tabindex="0"></div>
-  <canvas id="controller" style="display: none;"></canvas>
+  <canvas id="controller"></canvas>
   <script id="common">
-    const isDev = true
+    const isDev = false
 
     function Position (x, y) {
       this.x = x; this.y = y;
@@ -335,7 +339,7 @@
       }
       targetCtor.random = function (parent) {
         const index = Math.floor(Math.random() * sourceCtors.length)
-        const position = new Position(parent.width * 0.5, 0)
+        const position = new Position(Math.round(parent.row / 2) * Dot.size, 0)
         const Ctor = sourceCtors[index]
         const cube = new Ctor(parent, position)
         return cube
@@ -344,16 +348,20 @@
     extend(Cube, Stone, Snake, Bee, Zebra, SeaHorse, Tank)
   </script>
   <script>
-    function Playground (width = 200, height = 100) {
+    function Playground (row = 20, col = 10) {
+      const width = row * Dot.size
+      const height = col * Dot.size
+      this.col = col
+      this.row = row
       this.width = width
       this.height = height
       this.el = document.getElementById("playground");
       this.el.style.width = width + "px"
       this.el.style.height = height + "px"
       // 生成空白区块
-      const blocks = new Array(this.height / Dot.size)
+      const blocks = new Array(col)
         .fill(false)
-        .map(() => new Array(this.width / Dot.size))
+        .map(() => new Array(row))
       this.blocks = blocks
     }
   </script>
@@ -372,7 +380,7 @@
       this.previousTimeStamp = null
       this.playground = null
       this.state = null
-      this.normalInterval = 500
+      this.normalInterval = 300
       this.interval = this.normalInterval
       this.lastSetDirectionStamp = Date.now()
       // 连续两次间隔时间
@@ -391,11 +399,17 @@
       if (isDev) {
         this.playground = new Playground()
       } else {
-        this.playground = new Playground(380, 560)
+        this.playground = new Playground(19, 28)
       }
 
-      this.dots = new Array(this.playground.width * this.playground.height / (Dot.size ** 2))
       this.initHandler()
+
+      if (isDev) {
+        document.getElementById('controller').style.display = 'none'
+      } else {
+        document.getElementById('controller-btns').style.display = 'none'
+      }
+
       return this
     }
 
@@ -464,7 +478,6 @@
 
         if (flag) {
           count++
-          const prev = blocks[i - 1]
           for (let j = 0; j < row.length; j++) {
             // 肉体上消灭，移除 dom
             row[j].suicide()
@@ -477,7 +490,7 @@
         // 向下移动 count 步
         for (let j = 0; j < row.length; j++) {
           const dot = row[j]
-          if (!dot) continue
+          if (!dot || !count) continue
           const [x, y] = dot.indexArray()
           dot.setPosition(dot.position.x, dot.position.y + Dot.size * count).move()
           blocks[y][x] = null
