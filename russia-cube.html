@@ -41,6 +41,51 @@
     canvas {
       user-select: none;
     }
+
+    .panel {
+      display: flex;
+      justify-content: space-around;
+      list-style: none;
+      font-size: 10px;
+      padding-top: 50px;
+    }
+
+    .panel input {
+      width: 50px;
+      border: none;
+      outline: none;
+    }
+  </style>
+  <style>
+    html {
+      width: 100%;
+      height: 100%;
+    }
+    @media screen and (orientation: portrait) {
+    /*竖屏 css*/
+      body {
+        display: flex;
+        height: 100%;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .game-box {
+        display: flex;
+        width: 100%;
+        flex-direction: column;
+        justify-content: space-around;
+        align-items: center;
+      }
+    }
+    @media screen and (orientation: landscape) {
+      body {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+    }
   </style>
 </head>
 <body>
@@ -49,7 +94,13 @@
     <button onclick="game.pause()">pause</button>
     <button onclick="game.destroy()">reset</button>
   </div>
-  <div id="playground" tabindex="0"></div>
+  <div class="game-box">
+    <form name="panel" class="panel">
+      <div>状态：<input name="gameState" disabled/></div>
+      <div>得分：<input name="score" disabled/></div>
+    </form>
+    <div id="playground" tabindex="0" border-collapse="none"></div>
+  </div>
   <canvas id="controller"></canvas>
   <script id="common">
     const isDev = false
@@ -314,15 +365,15 @@
       position.y -= Dot.size * 3
       Cube.call(this, parent)
       this.dots = [
-        ...new Array(20).fill(undefined).map((v, i) => {
+        ...new Array(parent.row).fill(undefined).map((v, i) => {
           return new Dot(parent, new Position(i * Dot.size, position.y))
         }),
         new Dot(parent, new Position(position.x, position.y + 1 * Dot.size)),
-        ...new Array(20).fill(undefined).map((v, i) => {
+        ...new Array(parent.row).fill(undefined).map((v, i) => {
           return new Dot(parent, new Position(i * Dot.size, position.y + Dot.size * 2))
         }),
         new Dot(parent, new Position(position.x + Dot.size * 3, position.y + 3 * Dot.size)),
-        ...new Array(20).fill(undefined).map((v, i) => {
+        ...new Array(parent.row).fill(undefined).map((v, i) => {
           return new Dot(parent, new Position(i * Dot.size, position.y + Dot.size * 4))
         })
       ]
@@ -378,6 +429,7 @@
     }
 
     function Game () {
+      this.score = 0
       this.cube = null
       this.startTime = null
       this.previousTimeStamp = null
@@ -500,6 +552,8 @@
           blocks[y + count][x] = dot
         }
       }
+
+      this.score += count * 10
     }
 
     Game.prototype.makeCube = function () {
@@ -582,7 +636,11 @@
       this.cube.tryMove(direction)
     }
 
-    Game.prototype.updatePanel = function (direction) {}
+    Game.prototype.updatePanel = function () {
+      const panel = document.forms.panel
+      panel.gameState.value = this.state
+      panel.score.value = this.score
+    }
 
     const game = new Game().init()
   </script>
