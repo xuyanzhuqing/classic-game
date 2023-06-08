@@ -114,6 +114,7 @@
     function Cube (parent) {
       this.parent = parent
       this.dots = []
+      this.canRotate = true
       this.state = CubeState.unstable
     }
 
@@ -132,8 +133,6 @@
         blocks[y][x] = dot
       })
     }
-
-    Cube.prototype.rotate = function () {}
 
     Cube.prototype.tryMove = function (direction = Direction.down) {
       // 如果存在一个 dot 下方有实体，或者到底了
@@ -162,7 +161,11 @@
     }
 
     Cube.prototype.rotate = function () {
+      if (!this.canRotate) {
+        return
+      }
       const len = this.dots.length
+
       const { x: x0, y: y0 } = this.getCenter()
       const sin = Math.sin(Math.PI / 2)
       const cos = Math.cos(Math.PI / 2)
@@ -203,8 +206,7 @@
         if (
           x < 0 ||
           x > this.parent.width - Dot.size ||
-          blocks[y/Dot.size][x/Dot.size - 1] ||
-          blocks[y/Dot.size][x/Dot.size + 1]
+          blocks[y/Dot.size][x/Dot.size]
         ) {
           deltaX = 0
           break
@@ -215,14 +217,14 @@
         const dot = this.dots[i]
         const x = dot.position.x + deltaX
         const y = dot.position.y + deltaY
-        dot.setPosition(x, y)
-        dot.move()
+        dot.setPosition(x, y).move()
       }
     }
 
     function Stone (parent, position) {
       position.y -= Dot.size * 2
       Cube.call(this, parent)
+      this.canRotate = false
       this.dots = [
         new Dot(parent, new Position(position.x, position.y)),
         new Dot(parent, new Position(position.x + Dot.size, position.y)),
@@ -427,7 +429,6 @@
       switch(state) {
         case GameState.running:
           break
-          // TODO: game over tooltip
         case GameState.failure: alert("game over")
         default:
       }
