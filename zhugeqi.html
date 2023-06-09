@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Document</title>
+  <style>
+    canvas {
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="playground"></canvas>
+  <button onclick="game.clear()">clear</button>
+  <script>
+    function Position (x, y) {
+      this.x = x; this.y = y;
+    }
+
+    Position.prototype.set = function (x, y) {
+      this.x = x; this.y = y;
+    }
+
+    Position.prototype.get = function () {
+      return [this.x, this.y]
+    }
+  </script>
+  <script>
+    function Chequer (ctx, position, lattice) {
+      this.ctx = ctx
+      this.lattice = lattice
+      this.position = position
+      this.selected = false
+      this.heart = new Position(
+        this.position.x +  this.lattice.size / 2,
+        this.position.y +  this.lattice.size / 2
+      )
+      this.render()
+    }
+
+    Chequer.prototype.render = function () {
+      this.ctx.beginPath()
+      const heart = this.heart
+      this.ctx.arc(heart.x, heart.y, Chequer.radius, 0, Math.PI * 2, true);
+      this.ctx.stroke()
+
+      const r = Chequer.radius * 0.618
+      this.ctx.save()
+      this.ctx.beginPath()
+      this.ctx.fillStyle = '#000'
+      this.ctx.arc(heart.x, heart.y, r, 0, Math.PI * 2, true)
+      this.ctx.fill()
+      this.ctx.restore()
+    }
+
+    Chequer.prototype.clear = function () {
+      const lineWidth = this.ctx.lineWidth
+      const diameter = Chequer.radius * 2 + 2 * lineWidth
+      this.ctx.clearRect(this.heart.x - Chequer.radius - lineWidth, this.heart.y - Chequer.radius - lineWidth, diameter, diameter)
+      this.ctx.beginPath()
+    }
+
+    Chequer.radius = 16
+
+    function Lattice (ctx, position) {
+      const size = Chequer.radius * 2 + Lattice.padding
+      this.ctx = ctx
+      this.size = size
+
+      position.x *= size
+      position.y *= size
+
+      this.position = position
+    }
+
+    Lattice.prototype.clear = function () {
+      this.ctx.clearRect(this.position.x, this.position.y, this.size, this.size)
+    }
+
+    Lattice.padding = 10
+    Lattice.lineWidth = 1
+
+    function ChequerLattice (ctx, position) {
+      Lattice.call(this, ctx, position)
+      const size = this.size
+      this.chequer = new Chequer(ctx, position, this)
+      ctx.beginPath()
+      ctx.rect(position.x, position.y, size, size)
+      ctx.stroke()
+    }
+
+    function extend (targetCtor, ...sourceCtors) {
+      for (var i = 0; i < sourceCtors.length; i++) {
+        const sourceCtor = sourceCtors[i];
+        const oldPrototype = sourceCtor.prototype
+        sourceCtor.prototype = Object.assign(Object.create(targetCtor.prototype), oldPrototype)
+        sourceCtor.prototype.constructor = sourceCtor
+      }
+    }
+    extend(Lattice, ChequerLattice)
+
+    function Chessboard (ctx) {
+      const size = (Chequer.radius * 2 + Lattice.padding * 2) * 7 + 8 * Lattice.lineWidth
+      this.size = size
+      this.ctx = ctx
+    }
+
+    Chessboard.prototype.create = function () {
+      ctx.beginPath()
+
+      ctx.rect(0, 0, this.size, this.size);
+
+      ctx.stroke()
+    }
+
+    function Game () {
+      this.chessboard = null
+      this.ctx = null
+      this.lattices = []
+      this.mousedownHandler = null
+      this.mousemoveHandler = null
+      this.mouseupHandler = null
+    }
+
+    Game.prototype.init = function () {
+      const canvas = document.getElementById('playground')
+      const ctx = canvas.getContext('2d')
+      this.ctx = ctx
+      this.chessboard = new Chessboard(ctx)
+      canvas.width = this.chessboard.size
+      canvas.height = this.chessboard.size
+      this.initHandlers()
+      this.reset()
+      return this
+    }
+
+    Game.prototype.initHandlers = function () {
+      this.mousedownHandler = this.mousedown.bind(this)
+      this.mousemoveHandler = this.mousemove.bind(this)
+      this.mouseupHandler = this.mouseup.bind(this)
+      const canvas = document.getElementById('playground')
+
+      canvas.addEventListener('mousedown', this.mousedownHandler)
+      canvas.addEventListener('mousemove', this.mousemoveHandler)
+      canvas.addEventListener('mouseup', this.mouseupHandler)
+    }
+
+    Game.prototype.reset = function () {
+      const ctx = this.ctx
+
+      for (let i = 0 ; i < 7; i++) {
+        for (let j = 0 ; j < 7; j++) {
+          const position = new Position(i, j)
+          if (
+            ((i < 2 || i > 4) && j < 2) ||
+            ((i < 2 || i > 4) && j > 4)
+          ) {
+            continue
+          }
+
+          if (i === 3 && j === 3) {
+            this.lattices.push(new Lattice(ctx, position, null))
+          } else {
+            this.lattices.push(new ChequerLattice(ctx, position))
+          }
+        }
+      }
+    }
+
+    Game.prototype.clear = function () {
+      this.lattices.forEach(lattice => lattice.chequer?.clear())
+    }
+
+    Game.prototype.mousedown = function (e) {
+      const { offsetX, offsetY } = e
+      for (let i = 0; i < this.lattices.length; i++) {
+        const chequer = this.lattices[i].chequer
+        if (!chequer) {
+          continue
+        }
+
+        const heart = chequer.heart
+        if ((heart.x - offsetX) ** 2 + (heart.y - offsetY) ** 2 < Chequer.radius**2) {
+          console.info(offsetX, offsetY)
+        }
+      }
+    }
+    Game.prototype.mousemove = function () {}
+    Game.prototype.mouseup = function () {}
+
+    Game.prototype.destroy = function () {}
+
+    const game = new Game().init()
+  </script>
+</body>
+</html>
