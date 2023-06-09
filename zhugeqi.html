@@ -9,11 +9,24 @@
   <style>
     canvas {
       user-select: none;
+      position: absolute;
     }
+    #stage {
+      width: 480px;
+      height: 320px;
+      position: relative;
+    }
+    #background-layer { z-index: 1 }
+    #buff-layer { z-index: 2 }
+    #playground { z-index: 3 }
   </style>
 </head>
 <body>
-  <canvas id="playground"></canvas>
+  <div id="stage">
+    <canvas id="background-layer"></canvas>
+    <canvas id="buff-layer"></canvas>
+    <canvas id="playground"></canvas>
+  </div>
   <button onclick="game.clear()">clear</button>
   <script>
     function Position (x, y) {
@@ -41,16 +54,30 @@
       this.render()
     }
 
+    Chequer.prototype.toggleSelect = function (selected) {
+      if (typeof selected === 'boolean') {
+        this.selected = selected
+      } else {
+        this.selected = !this.selected
+      }
+      this.render()
+    }
+
     Chequer.prototype.render = function () {
+      this.clear()
       this.ctx.beginPath()
       const heart = this.heart
       this.ctx.arc(heart.x, heart.y, Chequer.radius, 0, Math.PI * 2, true);
-      this.ctx.stroke()
+      if (this.selected) {
+        this.ctx.fill()
+      } else {
+        this.ctx.stroke()
+      }
 
       const r = Chequer.radius * 0.618
-      this.ctx.save()
       this.ctx.beginPath()
-      this.ctx.fillStyle = '#000'
+      this.ctx.save()
+      this.ctx.fillStyle = this.selected ? '#fff' : '#000'
       this.ctx.arc(heart.x, heart.y, r, 0, Math.PI * 2, true)
       this.ctx.fill()
       this.ctx.restore()
@@ -63,8 +90,9 @@
       this.ctx.beginPath()
     }
 
-    Chequer.radius = 16
-
+    Chequer.radius = 10
+  </script>
+  <script>
     function Lattice (ctx, position) {
       const size = Chequer.radius * 2 + Lattice.padding
       this.ctx = ctx
@@ -72,8 +100,8 @@
 
       position.x *= size
       position.y *= size
-
       this.position = position
+      this.selected = false
     }
 
     Lattice.prototype.clear = function () {
@@ -83,13 +111,36 @@
     Lattice.padding = 10
     Lattice.lineWidth = 1
 
-    function ChequerLattice (ctx, position) {
+    function ChequerLattice (ctx, position, playgroundCtx) {
       Lattice.call(this, ctx, position)
-      const size = this.size
-      this.chequer = new Chequer(ctx, position, this)
+      this.chequer = new Chequer(playgroundCtx, position, this)
+      this.render()
+    }
+
+    ChequerLattice.prototype.render = function () {
+      const { ctx, position, size } = this
       ctx.beginPath()
       ctx.rect(position.x, position.y, size, size)
       ctx.stroke()
+    }
+
+    // 玩法 全部棋子摆满后，取出中央的一颗。棋子只能横向纵向(不可斜向)跳过邻的棋子到空位上。被跳过的棋子即被吃掉。
+    // 按照前面的方法继续移动，直到最后走不下去了，数数还剩下几颗棋子。剩下的棋子越少越厉害。
+    ChequerLattice.prototype.selectedBuff = function () {
+
+    }
+
+    ChequerLattice.prototype.toggleSelect = function (selected) {
+      if (typeof selected === 'boolean') {
+        this.selected = selected
+      } else {
+        this.selected = !this.selected
+      }
+      this.chequer.toggleSelect(selected)
+    }
+
+    ChequerLattice.prototype.clear = function () {
+      //
     }
 
     function extend (targetCtor, ...sourceCtors) {
@@ -115,23 +166,23 @@
 
       ctx.stroke()
     }
-
-    function Game () {
-      this.chessboard = null
-      this.ctx = null
-      this.lattices = []
+  </script>
+  <script>
+     function Game () {
+      this.chessboard = this.createBroad()
+      this.latticeSize = 7
+      this.lattices = new Array(this.latticeSize).fill().map(v => new Array(this.latticeSize).fill(null))
+      this.selectedLattice = null
       this.mousedownHandler = null
       this.mousemoveHandler = null
       this.mouseupHandler = null
+      this.bgCtx = null
+      this.playgroundCtx = null
+      this.buffCtx = null
     }
 
     Game.prototype.init = function () {
-      const canvas = document.getElementById('playground')
-      const ctx = canvas.getContext('2d')
-      this.ctx = ctx
-      this.chessboard = new Chessboard(ctx)
-      canvas.width = this.chessboard.size
-      canvas.height = this.chessboard.size
+      this.selectedChequer = null
       this.initHandlers()
       this.reset()
       return this
@@ -149,10 +200,36 @@
     }
 
     Game.prototype.reset = function () {
-      const ctx = this.ctx
+      this.resetBackgroundLayer()
+      this.resetBuffLayer()
+      this.resetPlayground()
+    }
 
-      for (let i = 0 ; i < 7; i++) {
-        for (let j = 0 ; j < 7; j++) {
+    Game.prototype.resetBackgroundLayer = function () {
+      const canvas = document.getElementById('background-layer')
+      this.bgCtx= canvas.getContext('2d')
+      canvas.width = this.chessboard.size
+      canvas.height = this.chessboard.size
+    }
+
+    Game.prototype.resetBuffLayer = function () {
+      const canvas = document.getElementById('buff-layer')
+      this.buffCtx= canvas.getContext('2d')
+      canvas.width = this.chessboard.size
+      canvas.height = this.chessboard.size
+    }
+
+    Game.prototype.resetPlayground = function () {
+      const canvas = document.getElementById('playground')
+      canvas.width = this.chessboard.size
+      canvas.height = this.chessboard.size
+
+      const bgCtx = this.bgCtx
+      this.playgroundCtx = canvas.getContext('2d')
+      // this.playgroundCtx.fillStyle = 'rgba(255, 255, 255, 0)';
+
+      for (let i = 0 ; i < this.latticeSize; i++) {
+        for (let j = 0 ; j < this.latticeSize; j++) {
           const position = new Position(i, j)
           if (
             ((i < 2 || i > 4) && j < 2) ||
@@ -162,32 +239,64 @@
           }
 
           if (i === 3 && j === 3) {
-            this.lattices.push(new Lattice(ctx, position, null))
+            this.lattices[i][j] = new Lattice(bgCtx, position)
           } else {
-            this.lattices.push(new ChequerLattice(ctx, position))
+            this.lattices[i][j] = new ChequerLattice(bgCtx, position, this.playgroundCtx)
           }
         }
       }
     }
 
+    Game.prototype.createBroad = function () {
+      const canvas = document.getElementById('background-layer')
+      const ctx = canvas.getContext('2d')
+      this.ctx = ctx
+      return new Chessboard(ctx)
+    }
+
     Game.prototype.clear = function () {
-      this.lattices.forEach(lattice => lattice.chequer?.clear())
+      this.lattices.flat().forEach(lattice => lattice.chequer?.clear())
+    }
+
+    Game.prototype.toggleSelect = function (lattice, isSelected) {
+      lattice.toggleSelect(isSelected)
     }
 
     Game.prototype.mousedown = function (e) {
       const { offsetX, offsetY } = e
+      rowsLoop:
       for (let i = 0; i < this.lattices.length; i++) {
-        const chequer = this.lattices[i].chequer
-        if (!chequer) {
-          continue
-        }
+        const rows = this.lattices[i]
+        colsLoop:
+        for (let j = 0 ; j < rows.length; j++) {
+          const lattice = rows[j]
+          // 非格子 非棋子
+          if (!lattice || !lattice.chequer) {
+            continue
+          }
 
-        const heart = chequer.heart
-        if ((heart.x - offsetX) ** 2 + (heart.y - offsetY) ** 2 < Chequer.radius**2) {
-          console.info(offsetX, offsetY)
+          // 是否点击棋子
+          const chequer = lattice.chequer
+          const heart = chequer.heart
+          if ((heart.x - offsetX) ** 2 + (heart.y - offsetY) ** 2 < Chequer.radius**2) {
+            if (this.selectedLattice === lattice && lattice.selected) {
+              this.toggleSelect(this.selectedLattice, false)
+              this.selectedLattice = null
+              break
+            }
+
+            if (this.selectedLattice) {
+              this.toggleSelect(this.selectedLattice, false)
+            }
+
+            this.toggleSelect(lattice, true)
+            this.selectedLattice = lattice
+            break rowsLoop
+          }
         }
       }
     }
+
     Game.prototype.mousemove = function () {}
     Game.prototype.mouseup = function () {}
 
