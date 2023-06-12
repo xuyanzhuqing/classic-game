@@ -25,7 +25,8 @@
     }
     #background-layer { z-index: 1 }
     #buff-layer { z-index: 2 }
-    #playground { z-index: 3 }
+    #moving-buff-layer { z-index: 3 }
+    #playground { z-index: 4 }
   </style>
 </head>
 <body>
@@ -41,6 +42,7 @@
   <div id="stage">
     <canvas id="background-layer"></canvas>
     <canvas id="buff-layer"></canvas>
+    <canvas id="moving-buff-layer"></canvas>
     <canvas id="playground"></canvas>
   </div>
 
@@ -58,16 +60,21 @@
     }
   </script>
   <script>
-    function Chequer (ctx, position, lattice) {
+    function Chequer (ctx, position, size) {
       this.ctx = ctx
-      this.lattice = lattice
       this.position = position
       this.selected = false
       this.heart = new Position(
-        this.position.x +  this.lattice.size / 2,
-        this.position.y +  this.lattice.size / 2
+        this.position.x +  size / 2,
+        this.position.y +  size / 2
       )
       this.render()
+    }
+
+    Chequer.prototype.setHeart = function (heart) {
+      this.heart.x = heart.x
+      this.heart.y = heart.y
+      return this
     }
 
     Chequer.prototype.toggleSelect = function (selected) {
@@ -131,7 +138,7 @@
 
     function ChequerLattice (ctx, position, playgroundCtx, isRender = true) {
       Lattice.call(this, ctx, position)
-      this.chequer = new Chequer(playgroundCtx, position, this)
+      this.chequer = new Chequer(playgroundCtx, position, this.size)
       isRender && this.render()
     }
 
@@ -188,6 +195,8 @@
       this.playgroundCtx = null
       this.buffCtx = null
       this.buffedAreas = []
+      this.movingBuffCtx = null
+      this.movingBuffPosition = new Position(0, 0)
     }
 
     Game.prototype.init = function () {
@@ -231,6 +240,14 @@
         canvas.width = size
         canvas.height = size
       }
+
+      {
+        const canvas = document.getElementById('moving-buff-layer')
+        this.movingBuffCtx= canvas.getContext('2d')
+        canvas.width = size
+        canvas.height = size
+      }
+
       {
         const canvas = document.getElementById('playground')
         canvas.width = size
@@ -376,58 +393,8 @@
         colsLoop:
         for (let j = 0 ; j < rows.length; j++) {
           const lattice = rows[j]
-          // 非格子
-          if (!lattice) {
-            continue
-          }
-
-          // 非棋子
-          if (!lattice.chequer) {
-            for (let k = 0; k < this.buffedAreas.length; k++ ) {
-              const buffedArea = this.buffedAreas[k];
-              const isInBuffedArea = offsetX > buffedArea.position.x &&
-                offsetY > buffedArea.position.y &&
-                offsetX < buffedArea.position.x + buffedArea.size &&
-                offsetY < buffedArea.position.y  + buffedArea.size
-
-              if (isInBuffedArea && lattice === buffedArea) {
-                let x, y
-                if (lattice.position.x === this.selectedLattice.position.x) {
-                  if (lattice.position.y < this.selectedLattice.position.y) {
-                    x = i;
-                    y = j + 1
-                  } else {
-                    x = i;
-                    y = j - 1
-                  }
-                }
-
-                if (lattice.position.y === this.selectedLattice.position.y) {
-                  if (lattice.position.x < this.selectedLattice.position.x) {
-                    x = i + 1;
-                    y = j
-                  } else {
-                    x = i - 1;
-                    y = j
-                  }
-                }
-
-                // 跳到的地方更新
-                this.lattices[i][j] = new ChequerLattice(this.bgCtx, new Position(i, j), this.playgroundCtx, false)
-                // 跳过的地方清除
-                this.lattices[x][y].chequer.clear()
-                this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
-                // 选中的改变
-                this.selectedLattice.chequer.clear()
-
-                x = this.selectedLattice.x
-                y = this.selectedLattice.y
-                this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
-                this.selectedLattice = null
-                this.clearBuffLayer()
-                break
-              }
-            }
+          // 非格子 非棋子
+          if (!lattice || !lattice.chequer) {
             continue
           }
 
@@ -447,14 +414,91 @@
 
             this.toggleSelect(lattice, true)
             this.selectedLattice = lattice
+            this.movingBuffPosition.x = offsetX
+            this.movingBuffPosition.y = offsetY
             break rowsLoop
           }
         }
       }
     }
 
-    Game.prototype.mousemove = function (e) {}
-    Game.prototype.mouseup = function (e) {}
+    Game.prototype.mousemove = function (e) {
+      // 生成拖拽的过程中生成一个幽灵棋子
+      this.movingBuffPosition.x = e.offsetX
+      this.movingBuffPosition.y = e.offsetY
+    }
+
+    Game.prototype.mouseup = function (e) {
+      const { offsetX, offsetY } = e
+      let isInBuffedArea = false
+      let x, y
+
+      rowsLoop:
+      for (let i = 0; i < this.lattices.length; i++) {
+        const rows = this.lattices[i]
+        colsLoop:
+        for (let j = 0 ; j < rows.length; j++) {
+          const lattice = rows[j]
+          // 非格子
+          if (!lattice) {
+            continue
+          }
+          for (let k = 0; k < this.buffedAreas.length; k++ ) {
+            const buffedArea = this.buffedAreas[k];
+            isInBuffedArea = offsetX > buffedArea.position.x &&
+              offsetY > buffedArea.position.y &&
+              offsetX < buffedArea.position.x + buffedArea.size &&
+              offsetY < buffedArea.position.y  + buffedArea.size
+
+            if (isInBuffedArea && lattice === buffedArea) {
+              x = i
+              y = j
+              break rowsLoop
+            }
+          }
+        }
+      }
+      this.clearBuffLayer()
+      if (isInBuffedArea) {
+        this.eat(x, y)
+      } else {
+        this.selectedLattice.chequer.toggleSelect(false)
+      }
+    }
+
+    Game.prototype.eat = function (x, y) {
+      const lattice = this.lattices[x][y]
+      // 跳到的地方更新
+      this.lattices[x][y] = new ChequerLattice(this.bgCtx, new Position(x, y), this.playgroundCtx, false)
+
+      if (lattice.position.x === this.selectedLattice.position.x) {
+        if (lattice.position.y < this.selectedLattice.position.y) {
+          y++
+        } else {
+          y--
+        }
+      }
+
+      if (lattice.position.y === this.selectedLattice.position.y) {
+        if (lattice.position.x < this.selectedLattice.position.x) {
+          x++
+        } else {
+          x--
+        }
+      }
+      // 跳过的地方清除
+      this.lattices[x][y].chequer.clear()
+      this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
+      // 选中的改变
+      this.selectedLattice.chequer.clear()
+
+      x = this.selectedLattice.x
+      y = this.selectedLattice.y
+      this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
+      this.selectedLattice = null
+    }
+
+
     Game.prototype.snapshot = function () {}
     Game.prototype.prevStep = function () {}
     Game.prototype.nextStep = function () {}
