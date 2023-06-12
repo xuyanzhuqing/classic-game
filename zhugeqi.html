@@ -7,6 +7,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Document</title>
   <style>
+    html, body {
+      height: 100%;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
     canvas {
       user-select: none;
       position: absolute;
@@ -21,9 +29,11 @@
   </style>
 </head>
 <body>
-  <button onclick="game.destroy()">reset</button>
-  <button onclick="game.prevStep()">上一步</button>
-  <button onclick="game.nextStep()">下一步</button>
+  <div>
+    <button onclick="game.destroy()">reset</button>
+    <button onclick="game.prevStep()">上一步</button>
+    <button onclick="game.nextStep()">下一步</button>
+  </div>
   <!-- <p>
     玩法 全部棋子摆满后，取出中央的一颗。棋子只能横向纵向(不可斜向)跳过邻的棋子到空位上。被跳过的棋子即被吃掉。<br/>
     按照前面的方法继续移动，直到最后走不下去了，数数还剩下几颗棋子。剩下的棋子越少越厉害。
@@ -96,7 +106,7 @@
       this.ctx.beginPath()
     }
 
-    Chequer.radius = 8
+    Chequer.radius = 6
   </script>
   <script>
     function Lattice (ctx, position) {
@@ -366,60 +376,58 @@
         colsLoop:
         for (let j = 0 ; j < rows.length; j++) {
           const lattice = rows[j]
-          // 非格子 非棋子
+          // 非格子
           if (!lattice) {
             continue
           }
 
+          // 非棋子
           if (!lattice.chequer) {
-            // 并且是选中的区域
-            let isBuffed = false
             for (let k = 0; k < this.buffedAreas.length; k++ ) {
-              if (lattice === this.buffedAreas[k]) {
-                isBuffed = true
+              const buffedArea = this.buffedAreas[k];
+              const isInBuffedArea = offsetX > buffedArea.position.x &&
+                offsetY > buffedArea.position.y &&
+                offsetX < buffedArea.position.x + buffedArea.size &&
+                offsetY < buffedArea.position.y  + buffedArea.size
+
+              if (isInBuffedArea && lattice === buffedArea) {
+                let x, y
+                if (lattice.position.x === this.selectedLattice.position.x) {
+                  if (lattice.position.y < this.selectedLattice.position.y) {
+                    x = i;
+                    y = j + 1
+                  } else {
+                    x = i;
+                    y = j - 1
+                  }
+                }
+
+                if (lattice.position.y === this.selectedLattice.position.y) {
+                  if (lattice.position.x < this.selectedLattice.position.x) {
+                    x = i + 1;
+                    y = j
+                  } else {
+                    x = i - 1;
+                    y = j
+                  }
+                }
+
+                // 跳到的地方更新
+                this.lattices[i][j] = new ChequerLattice(this.bgCtx, new Position(i, j), this.playgroundCtx, false)
+                // 跳过的地方清除
+                this.lattices[x][y].chequer.clear()
+                this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
+                // 选中的改变
+                this.selectedLattice.chequer.clear()
+
+                x = this.selectedLattice.x
+                y = this.selectedLattice.y
+                this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
+                this.selectedLattice = null
+                this.clearBuffLayer()
                 break
               }
             }
-
-            if (isBuffed) {
-              // 找出路径上的点并清除
-              // 判断清除的是哪个方向
-              let x, y
-              if (lattice.position.x === this.selectedLattice.position.x) {
-                if (lattice.position.y < this.selectedLattice.position.y) {
-                  x = i;
-                  y = j + 1
-                } else {
-                  x = i;
-                  y = j - 1
-                }
-              }
-
-              if (lattice.position.y === this.selectedLattice.position.y) {
-                if (lattice.position.x < this.selectedLattice.position.x) {
-                  x = i + 1;
-                  y = j
-                } else {
-                  x = i - 1;
-                  y = j
-                }
-              }
-
-              // 跳到的地方更新
-              this.lattices[i][j] = new ChequerLattice(this.bgCtx, new Position(i, j), this.playgroundCtx, false)
-              // 跳过的地方清除
-              this.lattices[x][y].chequer.clear()
-              this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
-              // 选中的改变
-              this.selectedLattice.chequer.clear()
-
-              x = this.selectedLattice.x
-              y = this.selectedLattice.y
-              this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
-              this.selectedLattice = null
-              this.clearBuffLayer()
-            }
-
             continue
           }
 
@@ -446,7 +454,7 @@
     }
 
     Game.prototype.mousemove = function (e) {}
-    Game.prototype.mouseup = function () {}
+    Game.prototype.mouseup = function (e) {}
     Game.prototype.snapshot = function () {}
     Game.prototype.prevStep = function () {}
     Game.prototype.nextStep = function () {}
