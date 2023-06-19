@@ -13,7 +13,7 @@
     body {
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      /* justify-content: center; */
     }
     canvas {
       user-select: none;
@@ -32,8 +32,8 @@
 <body>
   <div>
     <button onclick="game.destroy()">reset</button>
-    <button onclick="game.prevStep()">上一步</button>
-    <button onclick="game.nextStep()">下一步</button>
+    <button onclick="game.snapShotStack.backward()">上一步</button>
+    <button onclick="game.snapShotStack.forward()">下一步</button>
   </div>
   <!-- <p>
     玩法 全部棋子摆满后，取出中央的一颗。棋子只能横向纵向(不可斜向)跳过邻的棋子到空位上。被跳过的棋子即被吃掉。<br/>
@@ -43,7 +43,7 @@
     <canvas id="background-layer"></canvas>
     <canvas id="buff-layer"></canvas>
     <canvas id="moving-buff-layer"></canvas>
-    <canvas id="playground"></canvas>
+    <canvas id="playground" onselectstart="return false;"></canvas>
   </div>
 
   <script>
@@ -57,6 +57,21 @@
 
     Position.prototype.get = function () {
       return [this.x, this.y]
+    }
+
+    function get (obj, ...props) {
+      let res = obj
+      while (res && props.length > 0) {
+        const key = props.shift()
+        if (key in res) {
+          res = res[key]
+          if (props.length === 0) {
+            return res
+          }
+        } else {
+          return
+        }
+      }
     }
   </script>
   <script>
@@ -113,7 +128,7 @@
       this.ctx.beginPath()
     }
 
-    Chequer.radius = 6
+    Chequer.radius = 12
   </script>
   <script>
     function Lattice (ctx, position) {
@@ -183,6 +198,85 @@
     }
   </script>
   <script>
+    function SnapShot (instance) {
+        this.ctor = instance.constructor
+        const position = instance.position
+        this.position = new Position(position.x, position.y)
+      }
+
+      function SnapShotBuilder () {
+        this._from = null
+        this._to = null
+        this._path = null
+      }
+
+      SnapShotBuilder.prototype.form = function (from) {
+        this._from = from
+      }
+
+      SnapShotBuilder.prototype.to = function (to) {
+        this._to = to
+      }
+
+      SnapShotBuilder.prototype.path = function (path) {
+        this._path = path
+      }
+
+      SnapShotBuilder.prototype.build = function () {
+        return {
+          form: this._from,
+          to: this._to,
+          path: this._path
+        }
+      }
+
+      function SnapShotStack (game) {
+        this.index = -1
+        this.game = game
+        this.stacks = []
+      }
+
+      SnapShotStack.prototype.push = function (snapshot) {
+        const len = this.stacks.length
+        if (len !== this.index + 1) {
+          this.stacks.splice(this.index, this.stacks.length, snapshot)
+        } else {
+          this.stacks.push(snapshot)
+        }
+        this.index++
+        console.info(this.stacks)
+      }
+
+      SnapShotStack.prototype.forward = function () {
+        if (this.index >= this.stacks.length) {
+          console.warn("SnapShotStack", )
+          return
+        }
+        this.index++
+        this.do()
+      }
+
+      SnapShotStack.prototype.backward = function () {
+        this.index--
+        this.do()
+      }
+
+      SnapShotStack.prototype.do = function () {
+        console.info(this.stacks[this.index])
+        const stack = this.stacks[this.index]
+
+        for (const type in stack) {
+          let Ctor = stack[type].ctor
+          Ctor = Ctor === Lattice ? ChequerLattice : Lattice
+          new Ctor(this.game.bgCtx, stack[type].position, this.game.playgroundCtx)
+        }
+      }
+
+      SnapShotStack.prototype.message = function () {
+        return `length: ${this.stacks.length}; index: ${this.index}`
+      }
+  </script>
+  <script>
      function Game () {
       this.chessboard = this.createBroad()
       this.latticeSize = 7
@@ -197,6 +291,7 @@
       this.buffedAreas = []
       this.movingBuffCtx = null
       this.movingBuffPosition = new Position(0, 0)
+      this.snapShotStack = new SnapShotStack(this)
     }
 
     Game.prototype.init = function () {
@@ -420,6 +515,7 @@
           }
         }
       }
+      return false
     }
 
     Game.prototype.mousemove = function (e) {
@@ -461,16 +557,51 @@
       this.clearBuffLayer()
       if (isInBuffedArea) {
         this.eat(x, y)
+        this.judge()
       } else {
-        this.selectedLattice.chequer.toggleSelect(false)
+        this.selectedLattice.chequer?.toggleSelect(false)
       }
     }
 
+    // 判断输赢
+    Game.prototype.judge = function () {
+      const half = Math.floor(this.latticeSize / 2)
+      const center = new Position(half, half)
+
+      let restCount = 0
+      let restChequers = []
+      for (let i = 0; i < this.lattices.length; i++) {
+        const rows = this.lattices[i]
+        for (let j = 0 ; j < rows.length; j++) {
+          if (rows[j]?.chequer) {
+            restCount++
+            restChequers.push([i, j])
+          }
+        }
+      }
+
+      if (
+        restCount === 1 &&
+        (restChequers[0].x === center.x && restChequers[0].y === center.y)) {
+        console.info('congratulations, you have won the game')
+      }
+    }
+
+    Game.prototype.hasNeighbor = function (x, y) {
+      const bool = get(this.lattices, x - 1, y, 'chequer') ||
+        get(this.lattices, x + 1, y, 'chequer') ||
+        get(this.lattices, x, y - 1, 'chequer') ||
+        get(this.lattices, x, y + 1, 'chequer')
+      return bool
+    }
+
     Game.prototype.eat = function (x, y) {
+      const snapShotBuilder = new SnapShotBuilder()
       const lattice = this.lattices[x][y]
       // 跳到的地方更新
       this.lattices[x][y] = new ChequerLattice(this.bgCtx, new Position(x, y), this.playgroundCtx, false)
 
+      snapShotBuilder.to(new SnapShot(this.lattices[x][y]))
       if (lattice.position.x === this.selectedLattice.position.x) {
         if (lattice.position.y < this.selectedLattice.position.y) {
           y++
@@ -489,19 +620,17 @@
       // 跳过的地方清除
       this.lattices[x][y].chequer.clear()
       this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
+      snapShotBuilder.path(new SnapShot(this.lattices[x][y]))
       // 选中的改变
-      this.selectedLattice.chequer.clear()
-
       x = this.selectedLattice.x
       y = this.selectedLattice.y
       this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
+      snapShotBuilder.form(new SnapShot(this.lattices[x][y]))
+      this.selectedLattice.chequer.clear()
       this.selectedLattice = null
+
+      this.snapShotStack.push(snapShotBuilder.build())
     }
-
-
-    Game.prototype.snapshot = function () {}
-    Game.prototype.prevStep = function () {}
-    Game.prototype.nextStep = function () {}
 
     const game = new Game().init()
   </script>
