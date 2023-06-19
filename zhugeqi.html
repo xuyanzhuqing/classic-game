@@ -128,7 +128,7 @@
       this.ctx.beginPath()
     }
 
-    Chequer.radius = 12
+    Chequer.radius = 6
   </script>
   <script>
     function Lattice (ctx, position) {
@@ -283,14 +283,11 @@
       this.lattices = []
       this.selectedLattice = null
       this.mousedownHandler = null
-      this.mousemoveHandler = null
-      this.mouseupHandler = null
       this.bgCtx = null
       this.playgroundCtx = null
       this.buffCtx = null
       this.buffedAreas = []
       this.movingBuffCtx = null
-      this.movingBuffPosition = new Position(0, 0)
       this.snapShotStack = new SnapShotStack(this)
     }
 
@@ -310,13 +307,9 @@
 
     Game.prototype.initHandlers = function () {
       this.mousedownHandler = this.mousedown.bind(this)
-      this.mousemoveHandler = this.mousemove.bind(this)
-      this.mouseupHandler = this.mouseup.bind(this)
       const canvas = document.getElementById('playground')
 
       canvas.addEventListener('mousedown', this.mousedownHandler)
-      canvas.addEventListener('mousemove', this.mousemoveHandler)
-      canvas.addEventListener('mouseup', this.mouseupHandler)
     }
 
     Game.prototype.reset = function () {
@@ -482,14 +475,36 @@
 
     Game.prototype.mousedown = function (e) {
       const { offsetX, offsetY } = e
+      let isInBuffedArea = false
       rowsLoop:
       for (let i = 0; i < this.lattices.length; i++) {
         const rows = this.lattices[i]
         colsLoop:
         for (let j = 0 ; j < rows.length; j++) {
           const lattice = rows[j]
-          // 非格子 非棋子
-          if (!lattice || !lattice.chequer) {
+          // 非格子
+          if (!lattice) {
+            continue
+          }
+
+          if (!lattice.chequer) {
+            // 点击非棋子，查看是否吃子
+            for (let k = 0; k < this.buffedAreas.length; k++ ) {
+              const buffedArea = this.buffedAreas[k];
+              isInBuffedArea = offsetX > buffedArea.position.x &&
+                offsetY > buffedArea.position.y &&
+                offsetX < buffedArea.position.x + buffedArea.size &&
+                offsetY < buffedArea.position.y  + buffedArea.size
+
+              if (isInBuffedArea && lattice === buffedArea) {
+                isEat = true
+                this.clearBuffLayer()
+                this.eat(i, j)
+                this.judge()
+                break rowsLoop
+              }
+            }
+
             continue
           }
 
@@ -509,58 +524,11 @@
 
             this.toggleSelect(lattice, true)
             this.selectedLattice = lattice
-            this.movingBuffPosition.x = offsetX
-            this.movingBuffPosition.y = offsetY
             break rowsLoop
           }
         }
       }
       return false
-    }
-
-    Game.prototype.mousemove = function (e) {
-      // 生成拖拽的过程中生成一个幽灵棋子
-      this.movingBuffPosition.x = e.offsetX
-      this.movingBuffPosition.y = e.offsetY
-    }
-
-    Game.prototype.mouseup = function (e) {
-      const { offsetX, offsetY } = e
-      let isInBuffedArea = false
-      let x, y
-
-      rowsLoop:
-      for (let i = 0; i < this.lattices.length; i++) {
-        const rows = this.lattices[i]
-        colsLoop:
-        for (let j = 0 ; j < rows.length; j++) {
-          const lattice = rows[j]
-          // 非格子
-          if (!lattice) {
-            continue
-          }
-          for (let k = 0; k < this.buffedAreas.length; k++ ) {
-            const buffedArea = this.buffedAreas[k];
-            isInBuffedArea = offsetX > buffedArea.position.x &&
-              offsetY > buffedArea.position.y &&
-              offsetX < buffedArea.position.x + buffedArea.size &&
-              offsetY < buffedArea.position.y  + buffedArea.size
-
-            if (isInBuffedArea && lattice === buffedArea) {
-              x = i
-              y = j
-              break rowsLoop
-            }
-          }
-        }
-      }
-      this.clearBuffLayer()
-      if (isInBuffedArea) {
-        this.eat(x, y)
-        this.judge()
-      } else {
-        this.selectedLattice.chequer?.toggleSelect(false)
-      }
     }
 
     // 判断输赢
