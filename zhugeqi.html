@@ -13,7 +13,7 @@
     body {
       display: flex;
       flex-direction: column;
-      /* justify-content: center; */
+      justify-content: center;
     }
     canvas {
       user-select: none;
@@ -27,10 +27,16 @@
     #buff-layer { z-index: 2 }
     #moving-buff-layer { z-index: 3 }
     #playground { z-index: 4 }
+
+    .controller {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 12px;;
+    }
   </style>
 </head>
 <body>
-  <div>
+  <div class="controller">
     <button onclick="game.destroy()">reset</button>
     <button onclick="game.snapShotStack.backward()">上一步</button>
     <button onclick="game.snapShotStack.forward()">下一步</button>
@@ -128,11 +134,11 @@
       this.ctx.beginPath()
     }
 
-    Chequer.radius = 6
+    Chequer.radius = 12
   </script>
   <script>
     function Lattice (ctx, position) {
-      const size = Chequer.radius * 2 + Lattice.padding
+      const size = Chequer.radius * 2 + Lattice.padding * 2
       this.ctx = ctx
       this.size = size
       this.x = position.x
