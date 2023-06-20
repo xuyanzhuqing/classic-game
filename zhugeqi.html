@@ -201,7 +201,8 @@
     function SnapShot (instance) {
         this.ctor = instance.constructor
         const position = instance.position
-        this.position = new Position(position.x, position.y)
+        const size = instance.size
+        this.position = new Position(position.x / size, position.y / size)
       }
 
       function SnapShotBuilder () {
@@ -210,7 +211,7 @@
         this._path = null
       }
 
-      SnapShotBuilder.prototype.form = function (from) {
+      SnapShotBuilder.prototype.from = function (from) {
         this._from = from
       }
 
@@ -224,7 +225,7 @@
 
       SnapShotBuilder.prototype.build = function () {
         return {
-          form: this._from,
+          from: this._from,
           to: this._to,
           path: this._path
         }
@@ -237,6 +238,11 @@
       }
 
       SnapShotStack.prototype.push = function (snapshot) {
+        console.info(`
+          'from', ${snapshot.from.ctor.name} ${snapshot.from.position.x}, ${snapshot.from.position.y},
+          'path', ${snapshot.path.ctor.name} ${snapshot.path.position.x}, ${snapshot.path.position.y},
+          'to', ${snapshot.to.ctor.name} ${snapshot.to.position.x}, ${snapshot.to.position.y}
+        `)
         const len = this.stacks.length
         if (len !== this.index + 1) {
           this.stacks.splice(this.index, this.stacks.length, snapshot)
@@ -244,7 +250,6 @@
           this.stacks.push(snapshot)
         }
         this.index++
-        console.info(this.stacks)
       }
 
       SnapShotStack.prototype.forward = function () {
@@ -253,22 +258,36 @@
           return
         }
         this.index++
-        this.do()
+        this.do(true)
       }
 
       SnapShotStack.prototype.backward = function () {
-        this.index--
+        console.info(this.message())
+        if (this.index < 0) {
+          console.warn("none can be revert")
+          return
+        }
         this.do()
+        this.index--
       }
 
-      SnapShotStack.prototype.do = function () {
-        console.info(this.stacks[this.index])
+      SnapShotStack.prototype.do = function (isForward) {
         const stack = this.stacks[this.index]
 
         for (const type in stack) {
-          let Ctor = stack[type].ctor
-          Ctor = Ctor === Lattice ? ChequerLattice : Lattice
-          new Ctor(this.game.bgCtx, stack[type].position, this.game.playgroundCtx)
+          const Ctor = stack[type].ctor
+          const { x, y } = stack[type].position
+          let lattice
+          this.game.lattices[x][y]?.chequer?.clear()
+
+          const params = [this.game.bgCtx, new Position(x, y), this.game.playgroundCtx]
+
+          if (isForward) {
+            lattice = Ctor === Lattice ? new Lattice(...params) : new ChequerLattice(...params, false)
+          } else {
+            lattice = Ctor === Lattice ? new ChequerLattice(...params, false) : new Lattice(...params)
+          }
+          this.game.lattices[x][y] = lattice
         }
       }
 
@@ -593,7 +612,7 @@
       x = this.selectedLattice.x
       y = this.selectedLattice.y
       this.lattices[x][y] = new Lattice(this.bgCtx, new Position(x, y), this.playgroundCtx)
-      snapShotBuilder.form(new SnapShot(this.lattices[x][y]))
+      snapShotBuilder.from(new SnapShot(this.lattices[x][y]))
       this.selectedLattice.chequer.clear()
       this.selectedLattice = null
 
